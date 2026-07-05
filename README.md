@@ -76,6 +76,33 @@ The first build should do one thing well:
 - Stripe credits and subscriptions
 - Provider adapters for Replicate, fal.ai, RunPod, OpenAI, Kling, Runway, Luma, or local ComfyUI
 
+## Getting Started
+
+Requires Node.js 20+ and pnpm (Corepack will activate it automatically).
+
+**Windows:** double-click `START_AIMEDIAOS.bat`. It checks for Node/pnpm, installs
+dependencies, and starts the web dashboard at http://localhost:3000.
+
+**macOS/Linux:**
+
+```sh
+pnpm install
+pnpm --filter @aimediaos/web dev
+```
+
+To also run the API stub (health check, in-memory job queue) on http://localhost:4000:
+
+```sh
+pnpm --filter @aimediaos/api dev
+```
+
+Other useful commands from the repo root: `pnpm build`, `pnpm lint`, `pnpm typecheck`.
+
 ## Status
 
-Initial repository scaffold.
+Runnable monorepo scaffold. `apps/web` is a mobile-first Next.js dashboard implementing
+the upload → choose effect → generate → track job flow against a stub provider adapter.
+`apps/api` is a minimal Node service with the same job model backed by an in-memory store.
+`packages/db`, `packages/providers`, and `packages/workflows` are real, typed packages with
+placeholder implementations — swap in Postgres/Supabase, real provider adapters (Replicate,
+fal.ai, etc.), and persistent storage per the Suggested Stack above before shipping.
