@@ -4,78 +4,94 @@ AIMediaOS is an AI media operating system for generating, editing, animating, ro
 
 The goal is not to clone one AI effects website. The goal is to build a reusable media engine that can power many products: image generation, image-to-video, avatars, brand content, character consistency, workflow automation, and model routing.
 
-## Vision
+## Current Status
 
-AIMediaOS should become the shared media spine for EmpireOS-style products.
+Working MVP on the `develop` branch.
 
-It should support:
+The MVP currently includes:
 
-- Text-to-image
-- Image-to-image
-- Image-to-video
-- Video effects
-- Face-safe identity workflows
-- Brand and character profiles
-- Prompt templates
-- Model routing
-- GPU job queues
-- Credit billing
-- Media storage
-- Human review and safety controls
-- API-first access for other apps
+- Next.js dashboard
+- Workflow selection
+- Prompt-based generation
+- Credit deduction
+- Recent job history
+- Downloadable generated output
+- Prompt safety guard
+- Provider abstraction
+- Live-provider-ready image generation
+- Local fallback renderer
+- Provider timeout handling
+- CI for typecheck and build
 
-## Core Architecture
+## Quick Start
 
-```txt
-User / App
-  -> Web Dashboard
-  -> API Gateway
-  -> Auth + Credits
-  -> Job Queue
-  -> AI Router
-  -> Model Provider / GPU Worker
-  -> Storage + CDN
-  -> Result Viewer
+```powershell
+cd C:\__CODEDEPOT\AIMediaOS
+git checkout develop
+git pull origin develop
+pnpm install
+pnpm --filter @aimediaos/web dev
 ```
 
-## Monorepo Layout
+Open:
 
 ```txt
-apps/
-  web/        Next.js dashboard
-  api/        API service and job orchestration
-packages/
-  db/         Database schema and migrations
-  shared/     Shared types and utilities
-  workflows/  AI workflow definitions
-  providers/  Model provider adapters
-docs/         Product, architecture, roadmap, safety
+http://localhost:3000
 ```
 
-## First MVP
+## MVP Architecture
 
-The first build should do one thing well:
+```txt
+Browser Dashboard
+  -> POST /api/generate
+  -> Request validation
+  -> Safety guard
+  -> Workflow prompt builder
+  -> Provider router
+  -> Live provider or local fallback
+  -> Job payload returned to UI
+  -> Recent jobs saved locally
+```
 
-> Upload an image, select a safe creative effect, generate a new image or short video, track the job, charge credits, and store the result.
+## Project Layout
+
+```txt
+apps/web/
+  app/
+    api/generate/route.ts     Generation API endpoint
+    page.tsx                  Dashboard and create flow
+    globals.css               UI styling
+  lib/
+    workflows.ts              Workflow catalog
+    safety.ts                 Prompt safety guard
+    media-provider.ts         Provider abstraction and fallback renderer
+
+docs/
+  ARCHITECTURE.md             System design
+  RUNBOOK.md                  Local setup and troubleshooting
+  PERFORMANCE.md              Speed strategy and bottlenecks
+```
 
 ## Development Rules
 
 - `main` should stay stable.
 - `develop` is the working branch.
-- No mock-only features should be called complete.
-- Every workflow needs a real provider adapter or a clear stub label.
-- Safety, consent, and audit logs are first-class requirements.
+- Do not merge unfinished work into `main`.
+- Every workflow should have a real provider adapter or a clearly labeled fallback.
+- Safety, consent, and auditability are first-class requirements.
+- Long-running video generation should move to a queue before production.
 
-## Suggested Stack
+## Recommended Next Build
 
-- Next.js / React / TypeScript
-- Node.js API or FastAPI worker layer
-- PostgreSQL / Supabase
-- Redis / BullMQ
-- S3-compatible object storage
-- Stripe credits and subscriptions
-- Provider adapters for Replicate, fal.ai, RunPod, OpenAI, Kling, Runway, Luma, or local ComfyUI
+1. Add database-backed users, jobs, credits, and media records.
+2. Add object storage for generated files.
+3. Add subscriptions and credit packs.
+4. Add async job queue for video and long image jobs.
+5. Add real provider adapters by workflow type.
+6. Add admin dashboard for failed jobs, provider costs, and moderation.
 
-## Status
+## Docs
 
-Initial repository scaffold.
+- [Architecture](docs/ARCHITECTURE.md)
+- [Runbook](docs/RUNBOOK.md)
+- [Performance](docs/PERFORMANCE.md)
