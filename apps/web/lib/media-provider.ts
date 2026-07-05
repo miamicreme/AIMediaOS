@@ -1,5 +1,7 @@
 import type { Workflow } from "./workflows";
 
+const DEFAULT_PROVIDER_TIMEOUT_MS = 18_000;
+
 export type ProviderResult = {
   provider: "live-image-api" | "local-svg-demo";
   outputUrl: string;
@@ -7,12 +9,24 @@ export type ProviderResult = {
   fileExtension: "png" | "svg";
   model: string;
   usedLiveProvider: boolean;
+  fallbackReason?: string;
 };
 
 type GenerateArgs = {
   workflow: Workflow;
   prompt: string;
 };
+
+function getProviderTimeoutMs() {
+  const rawValue = process.env.AIMEDIA_PROVIDER_TIMEOUT_MS;
+  const parsedValue = rawValue ? Number(rawValue) : DEFAULT_PROVIDER_TIMEOUT_MS;
+
+  if (!Number.isFinite(parsedValue) || parsedValue < 1_000) {
+    return DEFAULT_PROVIDER_TIMEOUT_MS;
+  }
+
+  return Math.min(parsedValue, 60_000);
+}
 
 function escapeXml(value: string) {
   return value
@@ -51,10 +65,33 @@ function makeSvgDataUrl({ prompt, workflow }: GenerateArgs) {
     <foreignObject x="120" y="345" width="960" height="220">
       <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Inter, Arial; color: white; font-size: 38px; line-height: 1.12; font-weight: 850; letter-spacing: -1.4px;">${safePrompt}</div>
     </foreignObject>
-    <text x="120" y="665" fill="#e5e7eb" font-family="Inter, Arial" font-size="23">Live image endpoint not configured. Add one and this same app returns real generated images.</text>
+    <text x="120" y="665" fill="#e5e7eb" font-family="Inter, Arial" font-size="23">Live image endpoint unavailable. The app stayed responsive and returned a local fallback.</text>
   </svg>`;
 
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
+}
+
+function getImageUrlFromResponse(data: unknown) {
+  if (!data || typeof data !== "object") {
+    return null;
+  }
+
+  const responseData = data as Record<string, unknown>;
+  const directUrl = responseData.outputUrl ?? responseData.imageUrl ?? responseData.url;
+
+  if (typeof directUrl === "string") {
+    return directUrl;
+  }
+
+  if (Array.isArray(responseData.output) && typeof responseData.output[0] === "string") {
+    return responseData.output[0];
+  }
+
+  if (Array.isArray(responseData.images) && typeof responseData.images[0] === "string") {
+    return responseData.images[0];
+  }
+
+  return null;
 }
 
 async function tryLiveImageProvider(args: GenerateArgs): Promise<ProviderResult | null> {
@@ -65,45 +102,67 @@ async function tryLiveImageProvider(args: GenerateArgs): Promise<ProviderResult 
     return null;
   }
 
-  const response = await fetch(endpoint, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${token}`
-    },
-    body: JSON.stringify({
-      prompt: args.prompt,
-      workflow: args.workflow.id,
-      size: "1024x1024"
-    })
-  });
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), getProviderTimeoutMs());
 
-  if (!response.ok) {
-    throw new Error(`Live provider failed with ${response.status}`);
+  try {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      signal: controller.signal,
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        prompt: args.prompt,
+        workflow: args.workflow.id,
+        size: "1024x1024"
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error(`Live provider failed with ${response.status}`);
+    }
+
+    const data = await response.json();
+    const imageUrl = getImageUrlFromResponse(data);
+
+    if (!imageUrl) {
+      throw new Error("Live provider did not return an image URL");
+    }
+
+    return {
+      provider: "live-image-api",
+      outputUrl: imageUrl,
+      mimeType: "image/png",
+      fileExtension: "png",
+      model: typeof data === "object" && data && "model" in data && typeof data.model === "string" ? data.model : "external-image-provider",
+      usedLiveProvider: true
+    };
+  } finally {
+    clearTimeout(timeout);
   }
-
-  const data = await response.json();
-  const imageUrl = data.outputUrl ?? data.imageUrl ?? data.url;
-
-  if (!imageUrl || typeof imageUrl !== "string") {
-    throw new Error("Live provider did not return an image URL");
-  }
-
-  return {
-    provider: "live-image-api",
-    outputUrl: imageUrl,
-    mimeType: "image/png",
-    fileExtension: "png",
-    model: data.model ?? "external-image-provider",
-    usedLiveProvider: true
-  };
 }
 
 export async function generateMedia(args: GenerateArgs): Promise<ProviderResult> {
-  const liveResult = await tryLiveImageProvider(args);
+  try {
+    const liveResult = await tryLiveImageProvider(args);
 
-  if (liveResult) {
-    return liveResult;
+    if (liveResult) {
+      return liveResult;
+    }
+  } catch (error) {
+    const fallbackReason = error instanceof Error ? error.message : "Live provider failed";
+
+    return {
+      provider: "local-svg-demo",
+      outputUrl: makeSvgDataUrl(args),
+      mimeType: "image/svg+xml",
+      fileExtension: "svg",
+      model: "local-template-renderer",
+      usedLiveProvider: false,
+      fallbackReason
+    };
   }
 
   return {
@@ -112,6 +171,7 @@ export async function generateMedia(args: GenerateArgs): Promise<ProviderResult>
     mimeType: "image/svg+xml",
     fileExtension: "svg",
     model: "local-template-renderer",
-    usedLiveProvider: false
+    usedLiveProvider: false,
+    fallbackReason: "No live provider configured for this workflow"
   };
 }
