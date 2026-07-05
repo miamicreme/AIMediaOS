@@ -26,7 +26,7 @@ function escapeXml(value: string) {
 function makeSvgDataUrl({ prompt, workflow }: GenerateArgs) {
   const safePrompt = escapeXml(prompt);
   const safeWorkflow = escapeXml(workflow.name);
-  const safeCategory = escapeXml(workflow.category.toUpperCase());
+  const safeKind = escapeXml(workflow.kind.toUpperCase());
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="800" viewBox="0 0 1200 800">
     <defs>
       <linearGradient id="bg" x1="0" x2="1" y1="0" y2="1">
@@ -47,11 +47,11 @@ function makeSvgDataUrl({ prompt, workflow }: GenerateArgs) {
     <rect x="72" y="72" width="1056" height="656" rx="46" fill="#020617" opacity="0.58" filter="url(#shadow)"/>
     <text x="120" y="145" fill="#67e8f9" font-family="Inter, Arial" font-size="28" font-weight="900">AIMediaOS GENERATED ASSET</text>
     <text x="120" y="220" fill="#ffffff" font-family="Inter, Arial" font-size="66" font-weight="900">${safeWorkflow}</text>
-    <text x="120" y="280" fill="#c4b5fd" font-family="Inter, Arial" font-size="28" font-weight="800">${safeCategory} • ${workflow.kind.toUpperCase()} • LOCAL FALLBACK</text>
+    <text x="120" y="280" fill="#c4b5fd" font-family="Inter, Arial" font-size="28" font-weight="800">${safeKind} WORKFLOW • LOCAL FALLBACK</text>
     <foreignObject x="120" y="345" width="960" height="220">
       <div xmlns="http://www.w3.org/1999/xhtml" style="font-family: Inter, Arial; color: white; font-size: 38px; line-height: 1.12; font-weight: 850; letter-spacing: -1.4px;">${safePrompt}</div>
     </foreignObject>
-    <text x="120" y="665" fill="#e5e7eb" font-family="Inter, Arial" font-size="23">Live provider not configured. Add a server image endpoint later and this same app will return real AI images.</text>
+    <text x="120" y="665" fill="#e5e7eb" font-family="Inter, Arial" font-size="23">Live image endpoint not configured. Add one and this same app returns real generated images.</text>
   </svg>`;
 
   return `data:image/svg+xml;utf8,${encodeURIComponent(svg)}`;
