@@ -30,20 +30,23 @@ if errorlevel 1 (
 for /f "tokens=*" %%i in ('node -v') do set NODE_VERSION=%%i
 echo Node detected: %NODE_VERSION%
 
+REM Node 20 LTS is preferred. Node 24 usually works, but use Node 20 if Next shows errors.
+echo Recommended Node: 20 LTS
+
 REM Confirm pnpm exists. Try Corepack first, then npm global install fallback.
 where pnpm >nul 2>nul
 if errorlevel 1 (
   echo.
   echo pnpm not found. Trying Corepack activation...
-  corepack enable
-  corepack prepare pnpm@9.12.0 --activate
+  call corepack enable
+  call corepack prepare pnpm@9.12.0 --activate
 )
 
 where pnpm >nul 2>nul
 if errorlevel 1 (
   echo.
   echo Corepack did not expose pnpm. Trying npm global install...
-  npm install -g pnpm
+  call npm install -g pnpm
 )
 
 where pnpm >nul 2>nul
@@ -77,7 +80,7 @@ if exist ".git" (
 
 REM Install dependencies.
 echo Installing dependencies...
-pnpm install
+call pnpm install
 if errorlevel 1 (
   echo.
   echo ERROR: pnpm install failed.
@@ -94,7 +97,7 @@ echo.
 echo Press CTRL+C to stop the server.
 echo.
 
-pnpm --filter @aimediaos/web dev
+call pnpm --filter @aimediaos/web dev
 
 echo.
 echo AIMediaOS stopped.
