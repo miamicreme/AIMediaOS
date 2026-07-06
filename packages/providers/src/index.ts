@@ -1,21 +1,17 @@
-import type { MediaJob } from "@aimediaos/shared";
+export * from "./types";
+export { seedreamAdapter } from "./seedream";
+export { runpodAdapter } from "./runpod";
 
-export interface ProviderAdapter {
-  id: string;
-  label: string;
-  generate(job: Pick<MediaJob, "kind" | "effectId" | "sourceUrl">): Promise<{ resultUrl: string }>;
+import type { ProviderAdapter, ProviderJobInput } from "./types";
+import { seedreamAdapter } from "./seedream";
+import { runpodAdapter } from "./runpod";
+
+export const providers: ProviderAdapter[] = [seedreamAdapter, runpodAdapter];
+
+export function getProviderForJob(input: ProviderJobInput): ProviderAdapter {
+  if (input.kind === "video" || input.workflowId === "image-to-video") {
+    return runpodAdapter;
+  }
+
+  return seedreamAdapter;
 }
-
-/**
- * Returns a fake result without calling any external service.
- * Swap for a real adapter (Replicate, fal.ai, RunPod, OpenAI, etc.) per README's provider list.
- */
-export const stubAdapter: ProviderAdapter = {
-  id: "stub",
-  label: "Stub (no external calls)",
-  async generate(job) {
-    return { resultUrl: job.sourceUrl };
-  },
-};
-
-export const providers: ProviderAdapter[] = [stubAdapter];
