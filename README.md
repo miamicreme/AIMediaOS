@@ -42,10 +42,8 @@ User / App
 
 ```txt
 apps/
-  web/        Next.js dashboard
-  api/        API service and job orchestration
+  web/        Next.js dashboard + job API routes (apps/web/src/app/api)
 packages/
-  db/         Database schema and migrations
   shared/     Shared types and utilities
   workflows/  AI workflow definitions
   providers/  Model provider adapters
@@ -78,10 +76,12 @@ The first build should do one thing well:
 
 ## Getting Started
 
-Requires Node.js 20+ and pnpm (Corepack will activate it automatically).
+Requires Node.js 20+ and pnpm (Corepack will activate it automatically). There is only
+one app to run — the web dashboard also serves the job API.
 
 **Windows:** double-click `START_AIMEDIAOS.bat`. It checks for Node/pnpm, installs
-dependencies, and starts the web dashboard at http://localhost:3000.
+dependencies, and starts everything at http://localhost:3000. No API keys required —
+without provider credentials, effects run against local, in-browser processing.
 
 **macOS/Linux:**
 
@@ -90,19 +90,19 @@ pnpm install
 pnpm --filter @aimediaos/web dev
 ```
 
-To also run the API stub (health check, in-memory job queue) on http://localhost:4000:
+Then open http://localhost:3000.
 
-```sh
-pnpm --filter @aimediaos/api dev
-```
+To enable real image/video generation instead of the local preview effects, copy
+`.env.example` to `apps/web/.env.local` and fill in `SEEDREAM_*`/`RUNPOD_*` credentials.
 
 Other useful commands from the repo root: `pnpm build`, `pnpm lint`, `pnpm typecheck`.
 
 ## Status
 
-Runnable monorepo scaffold. `apps/web` is a mobile-first Next.js dashboard implementing
-the upload → choose effect → generate → track job flow against a stub provider adapter.
-`apps/api` is a minimal Node service with the same job model backed by an in-memory store.
-`packages/db`, `packages/providers`, and `packages/workflows` are real, typed packages with
-placeholder implementations — swap in Postgres/Supabase, real provider adapters (Replicate,
-fal.ai, etc.), and persistent storage per the Suggested Stack above before shipping.
+Runnable end-to-end. `apps/web` is a mobile-first Next.js dashboard implementing the
+upload → choose effect → generate → track job flow, with its own `/api/jobs` route
+handlers backing it (in-memory job store, no separate API service to run).
+`packages/providers` ships real Seedream and RunPod adapters that activate automatically
+once their env vars are set; `packages/workflows` defines the effect/workflow catalog.
+Persistent storage (Postgres/Supabase) and cloud file storage are not wired up yet —
+see the Suggested Stack above for what's next.

@@ -15,28 +15,6 @@ importers:
         specifier: latest
         version: 6.0.3
 
-  apps/api:
-    dependencies:
-      '@aimediaos/db':
-        specifier: workspace:*
-        version: link:../../packages/db
-      '@aimediaos/shared':
-        specifier: workspace:*
-        version: link:../../packages/shared
-      '@aimediaos/workflows':
-        specifier: workspace:*
-        version: link:../../packages/workflows
-    devDependencies:
-      '@types/node':
-        specifier: ^22.0.0
-        version: 22.20.0
-      tsx:
-        specifier: ^4.19.0
-        version: 4.23.0
-      typescript:
-        specifier: latest
-        version: 6.0.3
-
   apps/web:
     dependencies:
       '@aimediaos/providers':
@@ -86,22 +64,15 @@ importers:
         specifier: latest
         version: 6.0.3
 
-  packages/db:
-    dependencies:
-      '@aimediaos/shared':
-        specifier: workspace:*
-        version: link:../shared
-    devDependencies:
-      typescript:
-        specifier: latest
-        version: 6.0.3
-
   packages/providers:
     dependencies:
       '@aimediaos/shared':
         specifier: workspace:*
         version: link:../shared
     devDependencies:
+      '@types/node':
+        specifier: ^22.9.0
+        version: 22.20.0
       typescript:
         specifier: latest
         version: 6.0.3
@@ -2924,6 +2895,7 @@ snapshots:
       '@esbuild/win32-arm64': 0.28.1
       '@esbuild/win32-ia32': 0.28.1
       '@esbuild/win32-x64': 0.28.1
+    optional: true
 
   escalade@3.2.0: {}
 
@@ -4077,6 +4049,7 @@ snapshots:
       esbuild: 0.28.1
     optionalDependencies:
       fsevents: 2.3.3
+    optional: true
 
   turbo@2.10.3:
     optionalDependencies:
