@@ -2,34 +2,56 @@ import { Studio } from "@/components/Studio";
 
 export default function Home() {
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="sticky top-0 z-10 border-b border-white/10 bg-canvas/90 px-4 py-4 backdrop-blur sm:px-6">
-        <div className="mx-auto flex max-w-3xl items-center justify-between">
-          <span className="text-lg font-semibold tracking-tight">AIMediaOS</span>
-          <span className="rounded-full border border-white/10 px-3 py-1 text-xs text-white/60">
-            MVP scaffold
+    <div className="relative flex min-h-screen flex-col overflow-hidden">
+      <div className="pointer-events-none absolute inset-0 -z-10 bg-[radial-gradient(circle_at_top_left,rgba(124,58,237,0.35),transparent_34%),radial-gradient(circle_at_top_right,rgba(6,182,212,0.24),transparent_32%),linear-gradient(180deg,#070810_0%,#0b0c10_52%,#030712_100%)]" />
+      <header className="sticky top-0 z-10 border-b border-white/10 bg-black/35 px-4 py-4 backdrop-blur-xl sm:px-6">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br from-cyan-300 via-violet-500 to-fuchsia-500 text-sm font-black text-white shadow-lg shadow-violet-900/30">
+              AI
+            </div>
+            <div>
+              <div className="text-lg font-black tracking-tight text-white">AIMediaOS</div>
+              <div className="text-[11px] uppercase tracking-[0.28em] text-cyan-200/70">Media Engine</div>
+            </div>
+          </div>
+          <span className="rounded-full border border-emerald-300/25 bg-emerald-400/10 px-3 py-1 text-xs font-semibold text-emerald-100">
+            Test-ready local build
           </span>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-3xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
-        <section className="mb-8">
-          <h1 className="text-2xl font-bold leading-tight sm:text-3xl">
-            Upload an image, pick a safe effect, generate.
+      <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
+        <section className="mb-8 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-black/30 backdrop-blur sm:p-8">
+          <div className="mb-4 inline-flex rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold text-cyan-100">
+            Upload → Effect → Generate → Preview → Download
+          </div>
+          <h1 className="max-w-3xl text-3xl font-black leading-tight tracking-tight text-white sm:text-5xl">
+            Generate a polished test asset from any image in under a minute.
           </h1>
-          <p className="mt-2 text-sm text-white/60 sm:text-base">
-            This is AIMediaOS&apos;s first MVP flow: upload &rarr; select effect &rarr; generate
-            &rarr; track job &rarr; store result. Wired to the shared, workflows, and providers
-            packages in this monorepo.
+          <p className="mt-4 max-w-2xl text-sm leading-6 text-white/64 sm:text-base">
+            AIMediaOS is now set up for fast local testing. No billing, no login, no API key, and no external AI provider required. Upload a photo, pick an effect, generate a new PNG, and download the result.
           </p>
+          <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
+            {[
+              ["Local", "Runs in browser"],
+              ["PNG", "Download output"],
+              ["History", "Recent jobs saved"],
+              ["Ready", "Quick validation"]
+            ].map(([title, body]) => (
+              <div key={title} className="rounded-2xl border border-white/10 bg-black/20 p-3">
+                <div className="text-sm font-bold text-white">{title}</div>
+                <div className="mt-1 text-xs text-white/50">{body}</div>
+              </div>
+            ))}
+          </div>
         </section>
 
         <Studio />
       </main>
 
       <footer className="border-t border-white/10 px-4 py-6 text-center text-xs text-white/40 sm:px-6">
-        User / App &rarr; Web Dashboard &rarr; API Gateway &rarr; Job Queue &rarr; AI Router &rarr;
-        Storage + CDN
+        AIMediaOS local readiness build • Real test output today • Provider adapters next
       </footer>
     </div>
   );
