@@ -3,8 +3,7 @@ import { randomUUID } from "node:crypto";
 import { getProviderForJob } from "@aimediaos/providers";
 import { getWorkflowById } from "@aimediaos/workflows";
 import type { CreateMediaJobInput, MediaJob } from "@aimediaos/shared";
-
-const jobs = new Map<string, MediaJob>();
+import { jobs } from "./store";
 
 function json(status: number, body: unknown) {
   return NextResponse.json(body, { status });
@@ -76,5 +75,3 @@ export async function POST(request: Request) {
 export async function GET() {
   return json(200, { jobs: Array.from(jobs.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) });
 }
-
-export { jobs as inMemoryJobs };
