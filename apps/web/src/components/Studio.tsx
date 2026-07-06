@@ -21,45 +21,128 @@ function loadImage(sourceUrl: string) {
   });
 }
 
-function getFilter(effectId: string) {
-  if (effectId === "portrait-glow") {
-    return "brightness(1.1) contrast(1.08) saturate(1.18)";
-  }
-
-  if (effectId === "anime-style") {
-    return "contrast(1.22) saturate(1.55) brightness(1.05)";
-  }
-
-  return "brightness(1.05) contrast(1.05) saturate(1.2)";
+function clamp(value: number) {
+  return Math.max(0, Math.min(255, value));
 }
 
-function drawOverlay(ctx: CanvasRenderingContext2D, width: number, height: number, effect: CreativeEffect) {
+function posterize(value: number, levels = 5) {
+  const step = 255 / (levels - 1);
+  return Math.round(value / step) * step;
+}
+
+function applyPixelEffect(ctx: CanvasRenderingContext2D, width: number, height: number, effect: CreativeEffect) {
+  const imageData = ctx.getImageData(0, 0, width, height);
+  const data = imageData.data;
+
+  for (let index = 0; index < data.length; index += 4) {
+    const r = data[index];
+    const g = data[index + 1];
+    const b = data[index + 2];
+    const average = (r + g + b) / 3;
+
+    if (effect.id === "portrait-glow") {
+      data[index] = clamp(r * 1.18 + 18);
+      data[index + 1] = clamp(g * 1.08 + 10);
+      data[index + 2] = clamp(b * 0.95);
+    } else if (effect.id === "anime-style") {
+      data[index] = clamp(posterize(r * 1.18, 5));
+      data[index + 1] = clamp(posterize(g * 1.12, 5));
+      data[index + 2] = clamp(posterize(b * 1.28 + 12, 5));
+    } else {
+      data[index] = clamp(average * 0.42 + r * 0.52);
+      data[index + 1] = clamp(average * 0.78 + g * 0.22 + 18);
+      data[index + 2] = clamp(b * 1.35 + 38);
+    }
+  }
+
+  ctx.putImageData(imageData, 0, 0);
+}
+
+function drawStrongOverlay(
+  ctx: CanvasRenderingContext2D,
+  image: HTMLImageElement,
+  width: number,
+  height: number,
+  effect: CreativeEffect
+) {
   const gradient = ctx.createLinearGradient(0, 0, width, height);
 
   if (effect.id === "portrait-glow") {
-    gradient.addColorStop(0, "rgba(255, 214, 165, 0.28)");
-    gradient.addColorStop(1, "rgba(168, 85, 247, 0.18)");
+    gradient.addColorStop(0, "rgba(255, 196, 128, 0.52)");
+    gradient.addColorStop(0.5, "rgba(236, 72, 153, 0.18)");
+    gradient.addColorStop(1, "rgba(124, 58, 237, 0.32)");
   } else if (effect.id === "anime-style") {
-    gradient.addColorStop(0, "rgba(96, 165, 250, 0.22)");
-    gradient.addColorStop(1, "rgba(236, 72, 153, 0.26)");
+    gradient.addColorStop(0, "rgba(59, 130, 246, 0.42)");
+    gradient.addColorStop(0.52, "rgba(236, 72, 153, 0.34)");
+    gradient.addColorStop(1, "rgba(250, 204, 21, 0.18)");
   } else {
-    gradient.addColorStop(0, "rgba(34, 211, 238, 0.24)");
-    gradient.addColorStop(1, "rgba(14, 165, 233, 0.16)");
+    gradient.addColorStop(0, "rgba(34, 211, 238, 0.55)");
+    gradient.addColorStop(0.58, "rgba(37, 99, 235, 0.22)");
+    gradient.addColorStop(1, "rgba(14, 165, 233, 0.38)");
   }
 
-  ctx.globalCompositeOperation = "soft-light";
+  ctx.globalCompositeOperation = "screen";
   ctx.fillStyle = gradient;
   ctx.fillRect(0, 0, width, height);
   ctx.globalCompositeOperation = "source-over";
 
-  ctx.fillStyle = "rgba(2, 6, 23, 0.58)";
-  ctx.fillRect(0, height - 92, width, 92);
+  const vignette = ctx.createRadialGradient(width / 2, height / 2, width * 0.12, width / 2, height / 2, width * 0.72);
+  vignette.addColorStop(0, "rgba(255,255,255,0.02)");
+  vignette.addColorStop(1, "rgba(0,0,0,0.54)");
+  ctx.fillStyle = vignette;
+  ctx.fillRect(0, 0, width, height);
+
+  if (effect.id === "anime-style") {
+    ctx.globalAlpha = 0.26;
+    ctx.strokeStyle = "rgba(255,255,255,0.85)";
+    ctx.lineWidth = Math.max(1, width / 480);
+    for (let x = -height; x < width; x += Math.max(18, width / 32)) {
+      ctx.beginPath();
+      ctx.moveTo(x, height);
+      ctx.lineTo(x + height, 0);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  if (effect.id === "gentle-motion") {
+    ctx.globalAlpha = 0.28;
+    ctx.strokeStyle = "rgba(103, 232, 249, 0.95)";
+    ctx.lineWidth = Math.max(2, width / 180);
+    for (let y = height * 0.18; y < height * 0.82; y += height / 9) {
+      ctx.beginPath();
+      ctx.moveTo(width * 0.08, y);
+      ctx.bezierCurveTo(width * 0.32, y - 36, width * 0.62, y + 36, width * 0.95, y - 10);
+      ctx.stroke();
+    }
+    ctx.globalAlpha = 1;
+  }
+
+  const insetW = Math.round(width * 0.28);
+  const insetH = Math.round(insetW * 0.68);
+  const insetX = Math.round(width * 0.04);
+  const insetY = Math.round(height * 0.04);
+  ctx.save();
+  ctx.fillStyle = "rgba(0,0,0,0.68)";
+  ctx.fillRect(insetX - 8, insetY - 32, insetW + 16, insetH + 44);
+  ctx.drawImage(image, insetX, insetY, insetW, insetH);
+  ctx.fillStyle = "rgba(255,255,255,0.88)";
+  ctx.font = `${Math.max(12, Math.floor(width / 80))}px Arial`;
+  ctx.fillText("BEFORE", insetX, insetY - 10);
+  ctx.restore();
+
+  ctx.lineWidth = Math.max(10, Math.floor(width / 90));
+  ctx.strokeStyle = effect.id === "portrait-glow" ? "rgba(251, 191, 36, 0.74)" : effect.id === "anime-style" ? "rgba(236, 72, 153, 0.82)" : "rgba(34, 211, 238, 0.82)";
+  ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, width - ctx.lineWidth, height - ctx.lineWidth);
+
+  ctx.fillStyle = "rgba(2, 6, 23, 0.76)";
+  ctx.fillRect(0, height - 112, width, 112);
   ctx.fillStyle = "white";
-  ctx.font = `${Math.max(18, Math.floor(width / 34))}px Arial`;
-  ctx.fillText(`AIMediaOS • ${effect.label}`, 28, height - 52);
+  ctx.font = `${Math.max(24, Math.floor(width / 28))}px Arial`;
+  ctx.fillText(`AIMediaOS • ${effect.label}`, 28, height - 64);
   ctx.fillStyle = "rgba(255,255,255,0.72)";
-  ctx.font = `${Math.max(13, Math.floor(width / 54))}px Arial`;
-  ctx.fillText("Local test generation - no API key needed", 28, height - 24);
+  ctx.font = `${Math.max(14, Math.floor(width / 54))}px Arial`;
+  ctx.fillText("VISIBLE LOCAL EFFECT • DOWNLOADABLE PNG • NO API KEY", 28, height - 28);
 }
 
 async function generateLocalResult(sourceUrl: string, effect: CreativeEffect) {
@@ -77,12 +160,11 @@ async function generateLocalResult(sourceUrl: string, effect: CreativeEffect) {
 
   canvas.width = width;
   canvas.height = height;
-  ctx.filter = getFilter(effect.id);
   ctx.drawImage(image, 0, 0, width, height);
-  ctx.filter = "none";
-  drawOverlay(ctx, width, height, effect);
+  applyPixelEffect(ctx, width, height, effect);
+  drawStrongOverlay(ctx, image, width, height, effect);
 
-  return canvas.toDataURL("image/png", 0.92);
+  return canvas.toDataURL("image/png", 0.94);
 }
 
 export function Studio() {
@@ -165,7 +247,7 @@ export function Studio() {
         <div className="flex items-center justify-between gap-3">
           <h2 className="text-sm font-semibold text-white/80">1. Upload an image</h2>
           <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs text-emerald-200">
-            Local generator ready
+            Visible effects ready
           </span>
         </div>
         <label className="mt-3 flex min-h-[44px] w-full cursor-pointer items-center justify-center rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-3 text-sm text-white/70 active:bg-white/10">
@@ -183,7 +265,7 @@ export function Studio() {
       </section>
 
       <section className="rounded-2xl border border-white/10 bg-panel p-4 sm:p-6">
-        <h2 className="text-sm font-semibold text-white/80">2. Choose a test effect</h2>
+        <h2 className="text-sm font-semibold text-white/80">2. Choose a visible test effect</h2>
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
           {effects.map((effect) => {
             const active = effect.id === selectedEffect.id;
@@ -194,14 +276,14 @@ export function Studio() {
                 onClick={() => setSelectedEffect(effect)}
                 className={`min-h-[44px] rounded-xl border p-3 text-left text-sm transition ${
                   active
-                    ? "border-accent bg-accent/10 text-white"
+                    ? "border-cyan-300 bg-cyan-300/15 text-white shadow-lg shadow-cyan-950/30"
                     : "border-white/10 bg-white/5 text-white/70 active:bg-white/10"
                 }`}
               >
                 <div className="font-medium">{effect.label}</div>
                 <div className="mt-1 text-xs text-white/50">{effect.description}</div>
                 <div className="mt-2 inline-block rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-white/50">
-                  {effect.kind}
+                  visible PNG effect
                 </div>
               </button>
             );
@@ -218,7 +300,7 @@ export function Studio() {
             onClick={handleGenerate}
             className="min-h-[44px] rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/40"
           >
-            {isRunning ? "Generating…" : "Generate test asset"}
+            {isRunning ? "Generating…" : "Generate visible effect"}
           </button>
           <button
             type="button"
@@ -239,7 +321,7 @@ export function Studio() {
         {resultUrl && (
           <div className="mt-4">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <div className="text-xs text-white/50">Result</div>
+              <div className="text-xs text-white/50">Result includes a BEFORE inset and visible effect overlay</div>
               <a
                 href={resultUrl}
                 download={`aimediaos-${selectedEffect.id}.png`}
