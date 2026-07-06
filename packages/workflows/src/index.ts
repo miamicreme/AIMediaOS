@@ -1,29 +1,74 @@
-import type { CreativeEffect } from "@aimediaos/shared";
+import type { CreativeEffect, MediaKind, WorkflowId } from "@aimediaos/shared";
 
-/**
- * First MVP effect catalog per README: "select a safe creative effect".
- * Each effect should map to a real provider adapter before shipping.
- */
-export const effects: CreativeEffect[] = [
+export interface WorkflowDefinition {
+  id: WorkflowId;
+  label: string;
+  category: "image" | "video" | "makeover";
+  kind: MediaKind;
+  description: string;
+  requiredInputs: Array<"prompt" | "image">;
+  defaultModel: string;
+  provider: "seedream" | "runpod";
+  creditCost: number;
+}
+
+export const workflows: WorkflowDefinition[] = [
   {
-    id: "portrait-glow",
-    label: "Portrait Glow",
-    description: "Soft cinematic lighting pass for portraits.",
+    id: "ai-clothes-changer",
+    label: "AI Clothes Changer",
+    category: "makeover",
     kind: "image",
+    description: "Change clothing from an uploaded person image using a real image-editing provider.",
+    requiredInputs: ["image", "prompt"],
+    defaultModel: "seedream-4.5",
+    provider: "seedream",
+    creditCost: 4,
   },
   {
-    id: "anime-style",
-    label: "Anime Style",
-    description: "Restyle a photo into an anime-inspired look.",
+    id: "image-to-image",
+    label: "Image to Image",
+    category: "image",
     kind: "image",
+    description: "Transform an uploaded image with a prompt using a real image-editing provider.",
+    requiredInputs: ["image", "prompt"],
+    defaultModel: "seedream-4.5",
+    provider: "seedream",
+    creditCost: 4,
   },
   {
-    id: "gentle-motion",
-    label: "Gentle Motion",
-    description: "Turn a still image into a short looping video.",
+    id: "text-to-image",
+    label: "Text to Image",
+    category: "image",
+    kind: "image",
+    description: "Generate an image from a text prompt using a real image provider.",
+    requiredInputs: ["prompt"],
+    defaultModel: "seedream-4.5",
+    provider: "seedream",
+    creditCost: 4,
+  },
+  {
+    id: "image-to-video",
+    label: "Image to Video",
+    category: "video",
     kind: "video",
+    description: "Turn an uploaded image into a video through an async provider job.",
+    requiredInputs: ["image", "prompt"],
+    defaultModel: "runpod-image-to-video",
+    provider: "runpod",
+    creditCost: 24,
   },
 ];
+
+export function getWorkflowById(id: string): WorkflowDefinition | undefined {
+  return workflows.find((workflow) => workflow.id === id);
+}
+
+export const effects: CreativeEffect[] = workflows.map((workflow) => ({
+  id: workflow.id,
+  label: workflow.label,
+  description: workflow.description,
+  kind: workflow.kind,
+}));
 
 export function getEffectById(id: string): CreativeEffect | undefined {
   return effects.find((effect) => effect.id === id);
