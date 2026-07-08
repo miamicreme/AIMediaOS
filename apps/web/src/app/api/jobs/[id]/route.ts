@@ -18,6 +18,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         ...job,
         status: status.status,
         resultUrls: status.resultUrls ?? job.resultUrls,
+        queue: status.queue ?? job.queue,
         error: status.error,
         updatedAt: new Date().toISOString(),
       };
