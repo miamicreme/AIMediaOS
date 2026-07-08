@@ -34,11 +34,14 @@ export async function POST(request: Request) {
   const workflow = getWorkflowById(input.workflowId)!;
   const now = new Date().toISOString();
   const jobId = randomUUID();
+  const model = input.model ?? workflow.defaultModel;
+  const taskType = input.taskType ?? `${model}:${input.workflowId}`;
   const providerInput = {
     ...input,
     jobId,
     kind: workflow.kind,
-    model: input.model ?? workflow.defaultModel,
+    model,
+    taskType,
   };
   const provider = getProviderForJob(providerInput);
 
@@ -48,9 +51,12 @@ export async function POST(request: Request) {
     kind: workflow.kind,
     status: "queued",
     provider: provider.id,
+    taskType,
+    model,
     prompt: input.prompt,
     inputImages: input.inputImages ?? [],
     resultUrls: [],
+    queue: input.queueTag ? { queueTag: input.queueTag } : undefined,
     createdAt: now,
     updatedAt: now,
   };
@@ -63,6 +69,9 @@ export async function POST(request: Request) {
     status: submitted.status,
     provider: submitted.provider,
     providerJobId: submitted.providerJobId,
+    taskType: submitted.taskType ?? job.taskType,
+    model: submitted.model ?? job.model,
+    queue: submitted.queue ?? job.queue,
     resultUrls: submitted.resultUrls ?? [],
     error: submitted.error,
     updatedAt: new Date().toISOString(),
