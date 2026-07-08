@@ -2,7 +2,7 @@ export type MediaKind = "image" | "video";
 
 export type JobStatus = "queued" | "processing" | "complete" | "failed";
 
-export type ProviderId = "seedream" | "runpod" | "none";
+export type ProviderId = "seedream" | "runpod" | "qwen" | "none";
 
 export type WorkflowId =
   | "ai-clothes-changer"
@@ -25,7 +25,20 @@ export interface CreateMediaJobInput {
   resolution?: "HD" | "FHD";
   durationSeconds?: 5 | 8;
   model?: string;
+  taskType?: string;
+  queueTag?: string;
   options?: Record<string, unknown>;
+}
+
+export interface JobQueueMeta {
+  queueTag?: string;
+  queueLength?: number;
+  queuePosition?: number;
+  activeWorkers?: number;
+  estimatedWaitSeconds?: number;
+  estimatedProcessingSeconds?: number;
+  estimatedTotalSeconds?: number;
+  confidence?: "low" | "medium" | "high";
 }
 
 export interface MediaJob {
@@ -35,9 +48,12 @@ export interface MediaJob {
   status: JobStatus;
   provider: ProviderId;
   providerJobId?: string;
+  taskType?: string;
+  model?: string;
   prompt?: string;
   inputImages: MediaAsset[];
   resultUrls: string[];
+  queue?: JobQueueMeta;
   error?: string;
   createdAt: string;
   updatedAt: string;
