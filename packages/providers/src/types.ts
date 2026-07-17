@@ -1,4 +1,4 @@
-import type { CreateMediaJobInput, JobStatus, MediaKind, ProviderId } from "@aimediaos/shared";
+import type { CreateMediaJobInput, JobQueueMeta, JobStatus, MediaKind, ProviderId } from "@aimediaos/shared";
 
 export interface ProviderJobInput extends CreateMediaJobInput {
   jobId: string;
@@ -10,6 +10,9 @@ export interface ProviderSubmitResult {
   providerJobId?: string;
   status: JobStatus;
   resultUrls?: string[];
+  taskType?: string;
+  model?: string;
+  queue?: JobQueueMeta;
   error?: string;
   raw?: unknown;
 }
@@ -17,6 +20,7 @@ export interface ProviderSubmitResult {
 export interface ProviderStatusResult {
   status: JobStatus;
   resultUrls?: string[];
+  queue?: JobQueueMeta;
   error?: string;
   raw?: unknown;
 }
