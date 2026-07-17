@@ -24,20 +24,23 @@ export default function Home() {
       <main className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 sm:py-12">
         <section className="mb-8 overflow-hidden rounded-3xl border border-white/10 bg-white/[0.06] p-5 shadow-2xl shadow-black/30 backdrop-blur sm:p-8">
           <div className="mb-4 inline-flex rounded-full border border-cyan-300/20 bg-cyan-300/10 px-3 py-1 text-xs font-semibold text-cyan-100">
-            Upload → Effect → Generate → Preview → Download
+            Choose a workflow → Generate → Preview → Download
           </div>
           <h1 className="max-w-3xl text-3xl font-black leading-tight tracking-tight text-white sm:text-5xl">
-            Generate a polished test asset from any image in under a minute.
+            Text-to-image runs for real. Image workflows preview locally.
           </h1>
           <p className="mt-4 max-w-2xl text-sm leading-6 text-white/64 sm:text-base">
-            AIMediaOS is now set up for fast local testing. No billing, no login, no API key, and no external AI provider required. Upload a photo, pick an effect, generate a new PNG, and download the result.
+            No billing or login required. Text to Image calls a real Seedream job when
+            SEEDREAM_API_KEY is set (and shows the exact API error when it isn&apos;t). The
+            image-upload workflows always run as a local, in-browser preview — real generation
+            for those needs hosted image storage this local build doesn&apos;t have yet.
           </p>
           <div className="mt-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
             {[
               ["Local", "Runs in browser"],
-              ["PNG", "Download output"],
+              ["Live", "Real Seedream jobs"],
               ["History", "Recent jobs saved"],
-              ["Ready", "Quick validation"]
+              ["Honest", "No fake success states"]
             ].map(([title, body]) => (
               <div key={title} className="rounded-2xl border border-white/10 bg-black/20 p-3">
                 <div className="text-sm font-bold text-white">{title}</div>

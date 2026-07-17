@@ -99,10 +99,16 @@ Other useful commands from the repo root: `pnpm build`, `pnpm lint`, `pnpm typec
 
 ## Status
 
-Runnable end-to-end. `apps/web` is a mobile-first Next.js dashboard implementing the
-upload → choose effect → generate → track job flow, with its own `/api/jobs` route
-handlers backing it (in-memory job store, no separate API service to run).
-`packages/providers` ships real Seedream and RunPod adapters that activate automatically
-once their env vars are set; `packages/workflows` defines the effect/workflow catalog.
-Persistent storage (Postgres/Supabase) and cloud file storage are not wired up yet —
-see the Suggested Stack above for what's next.
+Runnable end-to-end, with one workflow wired all the way through to a real provider.
+`apps/web` is a mobile-first Next.js dashboard with its own `/api/jobs`,
+`/api/providers`, `/api/catalog`, and `/api/gallery` route handlers (in-memory job
+store, no separate API service to run). **Text to Image** calls the real Seedream
+adapter in `packages/providers` and returns a genuine generated image once
+`SEEDREAM_API_KEY`/`SEEDREAM_ENDPOINT` are set — without them it fails with a clear
+"not configured" error instead of crashing or faking success. The three image-upload
+workflows (Clothes Changer, Image to Image, Image to Video) currently render a local,
+in-browser canvas preview instead of calling a provider, because real generation for
+them needs hosted/public image storage that doesn't exist yet — see the Suggested
+Stack above for what's next. The RunPod adapter exists but nothing calls it yet.
+Persistent storage (Postgres/Supabase) is also not wired up: jobs live in an
+in-memory `Map` and reset when the server restarts.
