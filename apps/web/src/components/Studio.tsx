@@ -1,13 +1,13 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { effects } from "@aimediaos/workflows";
-import type { CreativeEffect, JobStatus } from "@aimediaos/shared";
+import { workflows, type WorkflowDefinition } from "@aimediaos/workflows";
+import type { JobStatus, MediaJob, ProviderId } from "@aimediaos/shared";
 
 type JobRecord = {
   id: string;
-  effectLabel: string;
-  fileName: string;
+  label: string;
+  source: "local" | "seedream";
   resultUrl: string;
   createdAt: string;
 };
@@ -30,7 +30,7 @@ function posterize(value: number, levels = 5) {
   return Math.round(value / step) * step;
 }
 
-function applyPixelEffect(ctx: CanvasRenderingContext2D, width: number, height: number, effect: CreativeEffect) {
+function applyPixelEffect(ctx: CanvasRenderingContext2D, width: number, height: number, workflowId: string) {
   const imageData = ctx.getImageData(0, 0, width, height);
   const data = imageData.data;
 
@@ -40,18 +40,14 @@ function applyPixelEffect(ctx: CanvasRenderingContext2D, width: number, height: 
     const b = data[index + 2];
     const average = (r + g + b) / 3;
 
-    if (effect.id === "portrait-glow") {
+    if (workflowId === "ai-clothes-changer") {
       data[index] = clamp(r * 1.18 + 18);
       data[index + 1] = clamp(g * 1.08 + 10);
       data[index + 2] = clamp(b * 0.95);
-    } else if (effect.id === "anime-style") {
+    } else {
       data[index] = clamp(posterize(r * 1.18, 5));
       data[index + 1] = clamp(posterize(g * 1.12, 5));
       data[index + 2] = clamp(posterize(b * 1.28 + 12, 5));
-    } else {
-      data[index] = clamp(average * 0.42 + r * 0.52);
-      data[index + 1] = clamp(average * 0.78 + g * 0.22 + 18);
-      data[index + 2] = clamp(b * 1.35 + 38);
     }
   }
 
@@ -63,22 +59,18 @@ function drawStrongOverlay(
   image: HTMLImageElement,
   width: number,
   height: number,
-  effect: CreativeEffect
+  workflow: WorkflowDefinition
 ) {
   const gradient = ctx.createLinearGradient(0, 0, width, height);
 
-  if (effect.id === "portrait-glow") {
+  if (workflow.id === "ai-clothes-changer") {
     gradient.addColorStop(0, "rgba(255, 196, 128, 0.52)");
     gradient.addColorStop(0.5, "rgba(236, 72, 153, 0.18)");
     gradient.addColorStop(1, "rgba(124, 58, 237, 0.32)");
-  } else if (effect.id === "anime-style") {
+  } else {
     gradient.addColorStop(0, "rgba(59, 130, 246, 0.42)");
     gradient.addColorStop(0.52, "rgba(236, 72, 153, 0.34)");
     gradient.addColorStop(1, "rgba(250, 204, 21, 0.18)");
-  } else {
-    gradient.addColorStop(0, "rgba(34, 211, 238, 0.55)");
-    gradient.addColorStop(0.58, "rgba(37, 99, 235, 0.22)");
-    gradient.addColorStop(1, "rgba(14, 165, 233, 0.38)");
   }
 
   ctx.globalCompositeOperation = "screen";
@@ -92,7 +84,7 @@ function drawStrongOverlay(
   ctx.fillStyle = vignette;
   ctx.fillRect(0, 0, width, height);
 
-  if (effect.id === "anime-style") {
+  if (workflow.id === "image-to-image") {
     ctx.globalAlpha = 0.26;
     ctx.strokeStyle = "rgba(255,255,255,0.85)";
     ctx.lineWidth = Math.max(1, width / 480);
@@ -100,19 +92,6 @@ function drawStrongOverlay(
       ctx.beginPath();
       ctx.moveTo(x, height);
       ctx.lineTo(x + height, 0);
-      ctx.stroke();
-    }
-    ctx.globalAlpha = 1;
-  }
-
-  if (effect.id === "gentle-motion") {
-    ctx.globalAlpha = 0.28;
-    ctx.strokeStyle = "rgba(103, 232, 249, 0.95)";
-    ctx.lineWidth = Math.max(2, width / 180);
-    for (let y = height * 0.18; y < height * 0.82; y += height / 9) {
-      ctx.beginPath();
-      ctx.moveTo(width * 0.08, y);
-      ctx.bezierCurveTo(width * 0.32, y - 36, width * 0.62, y + 36, width * 0.95, y - 10);
       ctx.stroke();
     }
     ctx.globalAlpha = 1;
@@ -132,20 +111,20 @@ function drawStrongOverlay(
   ctx.restore();
 
   ctx.lineWidth = Math.max(10, Math.floor(width / 90));
-  ctx.strokeStyle = effect.id === "portrait-glow" ? "rgba(251, 191, 36, 0.74)" : effect.id === "anime-style" ? "rgba(236, 72, 153, 0.82)" : "rgba(34, 211, 238, 0.82)";
+  ctx.strokeStyle = workflow.id === "ai-clothes-changer" ? "rgba(251, 191, 36, 0.74)" : "rgba(236, 72, 153, 0.82)";
   ctx.strokeRect(ctx.lineWidth / 2, ctx.lineWidth / 2, width - ctx.lineWidth, height - ctx.lineWidth);
 
   ctx.fillStyle = "rgba(2, 6, 23, 0.76)";
   ctx.fillRect(0, height - 112, width, 112);
   ctx.fillStyle = "white";
   ctx.font = `${Math.max(24, Math.floor(width / 28))}px Arial`;
-  ctx.fillText(`AIMediaOS • ${effect.label}`, 28, height - 64);
+  ctx.fillText(`AIMediaOS • ${workflow.label}`, 28, height - 64);
   ctx.fillStyle = "rgba(255,255,255,0.72)";
   ctx.font = `${Math.max(14, Math.floor(width / 54))}px Arial`;
-  ctx.fillText("VISIBLE LOCAL EFFECT • DOWNLOADABLE PNG • NO API KEY", 28, height - 28);
+  ctx.fillText("LOCAL PREVIEW • NOT REAL AI OUTPUT", 28, height - 28);
 }
 
-async function generateLocalResult(sourceUrl: string, effect: CreativeEffect) {
+async function generateLocalResult(sourceUrl: string, workflow: WorkflowDefinition) {
   const image = await loadImage(sourceUrl);
   const maxSize = 1400;
   const scale = Math.min(1, maxSize / Math.max(image.naturalWidth, image.naturalHeight));
@@ -161,16 +140,30 @@ async function generateLocalResult(sourceUrl: string, effect: CreativeEffect) {
   canvas.width = width;
   canvas.height = height;
   ctx.drawImage(image, 0, 0, width, height);
-  applyPixelEffect(ctx, width, height, effect);
-  drawStrongOverlay(ctx, image, width, height, effect);
+  applyPixelEffect(ctx, width, height, workflow.id);
+  drawStrongOverlay(ctx, image, width, height, workflow);
 
   return canvas.toDataURL("image/png", 0.94);
 }
 
+async function pollJob(jobId: string): Promise<MediaJob> {
+  for (let attempt = 0; attempt < 20; attempt += 1) {
+    const response = await fetch(`/api/jobs/${jobId}`);
+    const body = (await response.json()) as { job: MediaJob };
+    if (body.job.status === "complete" || body.job.status === "failed") {
+      return body.job;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+  }
+  throw new Error("Timed out waiting for the provider to finish.");
+}
+
 export function Studio() {
+  const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowDefinition>(workflows[0]);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
-  const [selectedEffect, setSelectedEffect] = useState<CreativeEffect>(effects[0]);
+  const [prompt, setPrompt] = useState("");
+  const [providerStatus, setProviderStatus] = useState<Partial<Record<ProviderId, boolean>>>({});
   const [status, setStatus] = useState<JobStatus>("queued");
   const [resultUrl, setResultUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -178,11 +171,24 @@ export function Studio() {
   const [isRunning, setIsRunning] = useState(false);
   const objectUrlRef = useRef<string | null>(null);
 
+  const requiresImage = selectedWorkflow.requiredInputs.includes("image");
+  const isLiveWorkflow = !requiresImage;
+  const isConfigured = Boolean(providerStatus[selectedWorkflow.provider]);
+
   useEffect(() => {
     const savedJobs = window.localStorage.getItem("aimediaos_jobs");
     if (savedJobs) {
       setJobs(JSON.parse(savedJobs) as JobRecord[]);
     }
+
+    fetch("/api/providers")
+      .then((response) => response.json())
+      .then((body: { providers: Array<{ id: ProviderId; configured: boolean }> }) => {
+        const next: Partial<Record<ProviderId, boolean>> = {};
+        for (const provider of body.providers) next[provider.id] = provider.configured;
+        setProviderStatus(next);
+      })
+      .catch(() => setProviderStatus({}));
 
     return () => {
       if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
@@ -192,6 +198,13 @@ export function Studio() {
   function saveJobs(nextJobs: JobRecord[]) {
     setJobs(nextJobs);
     window.localStorage.setItem("aimediaos_jobs", JSON.stringify(nextJobs));
+  }
+
+  function selectWorkflow(workflow: WorkflowDefinition) {
+    setSelectedWorkflow(workflow);
+    setResultUrl(null);
+    setError(null);
+    setStatus("queued");
   }
 
   function handleFileChange(event: React.ChangeEvent<HTMLInputElement>) {
@@ -207,7 +220,7 @@ export function Studio() {
     setStatus("queued");
   }
 
-  async function handleGenerate() {
+  async function handleGenerateLocal() {
     if (!sourceUrl || !fileName) return;
     setIsRunning(true);
     setResultUrl(null);
@@ -215,15 +228,53 @@ export function Studio() {
     setStatus("processing");
 
     try {
-      const output = await generateLocalResult(sourceUrl, selectedEffect);
+      const output = await generateLocalResult(sourceUrl, selectedWorkflow);
       const job: JobRecord = {
-        id: `job_${Date.now()}`,
-        effectLabel: selectedEffect.label,
-        fileName,
+        id: `local_${Date.now()}`,
+        label: `${selectedWorkflow.label} (local preview)`,
+        source: "local",
         resultUrl: output,
-        createdAt: new Date().toLocaleString()
+        createdAt: new Date().toLocaleString(),
       };
       setResultUrl(output);
+      saveJobs([job, ...jobs].slice(0, 8));
+      setStatus("complete");
+    } catch (caughtError) {
+      setError(caughtError instanceof Error ? caughtError.message : "Generation failed");
+      setStatus("failed");
+    } finally {
+      setIsRunning(false);
+    }
+  }
+
+  async function handleGenerateLive() {
+    if (!prompt.trim()) return;
+    setIsRunning(true);
+    setResultUrl(null);
+    setError(null);
+    setStatus("processing");
+
+    try {
+      const response = await fetch("/api/jobs", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ workflowId: selectedWorkflow.id, prompt: prompt.trim() }),
+      });
+      const body = (await response.json()) as { job: MediaJob };
+      const finalJob = body.job.status === "complete" || body.job.status === "failed" ? body.job : await pollJob(body.job.id);
+
+      if (finalJob.status === "failed" || finalJob.resultUrls.length === 0) {
+        throw new Error(finalJob.error ?? "Generation failed with no result.");
+      }
+
+      const job: JobRecord = {
+        id: finalJob.id,
+        label: `${selectedWorkflow.label} — "${prompt.trim().slice(0, 60)}"`,
+        source: "seedream",
+        resultUrl: finalJob.resultUrls[0],
+        createdAt: new Date().toLocaleString(),
+      };
+      setResultUrl(finalJob.resultUrls[0]);
       saveJobs([job, ...jobs].slice(0, 8));
       setStatus("complete");
     } catch (caughtError) {
@@ -241,49 +292,42 @@ export function Studio() {
     saveJobs([]);
   }
 
+  const canGenerate = isLiveWorkflow ? prompt.trim().length > 0 : Boolean(sourceUrl);
+
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-white/10 bg-panel p-4 sm:p-6">
-        <div className="flex items-center justify-between gap-3">
-          <h2 className="text-sm font-semibold text-white/80">1. Upload an image</h2>
-          <span className="rounded-full bg-emerald-400/10 px-3 py-1 text-xs text-emerald-200">
-            Visible effects ready
-          </span>
-        </div>
-        <label className="mt-3 flex min-h-[44px] w-full cursor-pointer items-center justify-center rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-3 text-sm text-white/70 active:bg-white/10">
-          <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
-          {fileName ?? "Tap to choose a photo"}
-        </label>
-        {sourceUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={sourceUrl}
-            alt="Selected upload preview"
-            className="mt-3 max-h-72 w-full rounded-xl object-cover"
-          />
-        )}
-      </section>
-
-      <section className="rounded-2xl border border-white/10 bg-panel p-4 sm:p-6">
-        <h2 className="text-sm font-semibold text-white/80">2. Choose a visible test effect</h2>
-        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2 md:grid-cols-3">
-          {effects.map((effect) => {
-            const active = effect.id === selectedEffect.id;
+        <h2 className="text-sm font-semibold text-white/80">1. Choose a workflow</h2>
+        <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
+          {workflows.map((workflow) => {
+            const active = workflow.id === selectedWorkflow.id;
+            const live = !workflow.requiredInputs.includes("image");
+            const badge = live
+              ? providerStatus[workflow.provider]
+                ? "Live · real generation"
+                : `Live · needs ${workflow.provider === "seedream" ? "SEEDREAM_API_KEY" : "RUNPOD_API_KEY"}`
+              : "Local preview only";
             return (
               <button
-                key={effect.id}
+                key={workflow.id}
                 type="button"
-                onClick={() => setSelectedEffect(effect)}
+                onClick={() => selectWorkflow(workflow)}
                 className={`min-h-[44px] rounded-xl border p-3 text-left text-sm transition ${
                   active
                     ? "border-cyan-300 bg-cyan-300/15 text-white shadow-lg shadow-cyan-950/30"
                     : "border-white/10 bg-white/5 text-white/70 active:bg-white/10"
                 }`}
               >
-                <div className="font-medium">{effect.label}</div>
-                <div className="mt-1 text-xs text-white/50">{effect.description}</div>
-                <div className="mt-2 inline-block rounded-full bg-white/10 px-2 py-0.5 text-[10px] uppercase tracking-wide text-white/50">
-                  visible PNG effect
+                <div className="font-medium">{workflow.label}</div>
+                <div className="mt-1 text-xs text-white/50">{workflow.description}</div>
+                <div
+                  className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide ${
+                    live && providerStatus[workflow.provider]
+                      ? "bg-emerald-400/15 text-emerald-200"
+                      : "bg-white/10 text-white/50"
+                  }`}
+                >
+                  {badge}
                 </div>
               </button>
             );
@@ -291,16 +335,54 @@ export function Studio() {
         </div>
       </section>
 
+      {requiresImage ? (
+        <section className="rounded-2xl border border-white/10 bg-panel p-4 sm:p-6">
+          <h2 className="text-sm font-semibold text-white/80">2. Upload an image</h2>
+          <p className="mt-1 text-xs text-white/50">
+            This workflow needs hosted image input to run for real, which this local build
+            doesn&apos;t have yet — you&apos;ll get a local style preview instead.
+          </p>
+          <label className="mt-3 flex min-h-[44px] w-full cursor-pointer items-center justify-center rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-3 text-sm text-white/70 active:bg-white/10">
+            <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
+            {fileName ?? "Tap to choose a photo"}
+          </label>
+          {sourceUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={sourceUrl}
+              alt="Selected upload preview"
+              className="mt-3 max-h-72 w-full rounded-xl object-cover"
+            />
+          )}
+        </section>
+      ) : (
+        <section className="rounded-2xl border border-white/10 bg-panel p-4 sm:p-6">
+          <h2 className="text-sm font-semibold text-white/80">2. Describe the image</h2>
+          <p className="mt-1 text-xs text-white/50">
+            {isConfigured
+              ? "Sent to a real Seedream image job."
+              : "Seedream isn't configured yet — generating will show the exact error the API returns."}
+          </p>
+          <textarea
+            value={prompt}
+            onChange={(event) => setPrompt(event.target.value)}
+            placeholder="A neon-lit city street in the rain, cinematic"
+            rows={3}
+            className="mt-3 w-full rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white placeholder:text-white/30 focus:border-cyan-300 focus:outline-none"
+          />
+        </section>
+      )}
+
       <section className="rounded-2xl border border-white/10 bg-panel p-4 sm:p-6">
-        <h2 className="text-sm font-semibold text-white/80">3. Generate and download</h2>
+        <h2 className="text-sm font-semibold text-white/80">3. Generate{isLiveWorkflow ? "" : " and download"}</h2>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row">
           <button
             type="button"
-            disabled={!sourceUrl || isRunning}
-            onClick={handleGenerate}
+            disabled={!canGenerate || isRunning}
+            onClick={isLiveWorkflow ? handleGenerateLive : handleGenerateLocal}
             className="min-h-[44px] rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/40"
           >
-            {isRunning ? "Generating…" : "Generate visible effect"}
+            {isRunning ? "Generating…" : isLiveWorkflow ? "Generate with Seedream" : "Generate local preview"}
           </button>
           <button
             type="button"
@@ -321,13 +403,15 @@ export function Studio() {
         {resultUrl && (
           <div className="mt-4">
             <div className="mb-2 flex items-center justify-between gap-3">
-              <div className="text-xs text-white/50">Result includes a BEFORE inset and visible effect overlay</div>
+              <div className="text-xs text-white/50">
+                {isLiveWorkflow ? "Real Seedream output" : "Local preview with a BEFORE inset and visible effect overlay"}
+              </div>
               <a
                 href={resultUrl}
-                download={`aimediaos-${selectedEffect.id}.png`}
+                download={`aimediaos-${selectedWorkflow.id}.png`}
                 className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white active:bg-white/20"
               >
-                Download PNG
+                Download
               </a>
             </div>
             {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -342,7 +426,7 @@ export function Studio() {
 
       {jobs.length > 0 && (
         <section className="rounded-2xl border border-white/10 bg-panel p-4 sm:p-6">
-          <h2 className="text-sm font-semibold text-white/80">Recent local jobs</h2>
+          <h2 className="text-sm font-semibold text-white/80">Recent results</h2>
           <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
             {jobs.map((job) => (
               <a
@@ -353,8 +437,8 @@ export function Studio() {
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img src={job.resultUrl} alt="Recent generated result" className="h-28 w-full rounded-lg object-cover" />
-                <div className="mt-2 text-sm font-medium text-white">{job.effectLabel}</div>
-                <div className="text-xs text-white/50">{job.fileName}</div>
+                <div className="mt-2 text-sm font-medium text-white">{job.label}</div>
+                <div className="text-xs text-white/50">{job.source === "seedream" ? "Real Seedream job" : "Local preview"}</div>
                 <div className="text-xs text-white/40">{job.createdAt}</div>
               </a>
             ))}
