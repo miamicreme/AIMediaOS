@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { jobs } from "../jobs/store";
 
 export async function GET() {
-  const items = Array.from(jobs.values())
+  const allJobs = await jobs.list();
+  const items = allJobs
     .filter((job) => job.resultUrls.length > 0)
     .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt))
     .flatMap((job) =>

@@ -2,12 +2,13 @@
 
 import { useEffect, useRef, useState } from "react";
 import { workflows, type WorkflowDefinition } from "@aimediaos/workflows";
-import type { JobStatus, MediaJob, ProviderId } from "@aimediaos/shared";
+import type { JobStatus, MediaJob, MediaKind, ProviderId } from "@aimediaos/shared";
 
 type JobRecord = {
   id: string;
   label: string;
-  source: "local" | "seedream";
+  source: "local" | ProviderId;
+  kind: MediaKind;
   resultUrl: string;
   createdAt: string;
 };
@@ -158,21 +159,29 @@ async function pollJob(jobId: string): Promise<MediaJob> {
   throw new Error("Timed out waiting for the provider to finish.");
 }
 
+const PROVIDER_ENV_HINT: Partial<Record<ProviderId, string>> = {
+  seedream: "SEEDREAM_API_KEY",
+  runpod: "RUNPOD_API_KEY",
+};
+
 export function Studio() {
   const [selectedWorkflow, setSelectedWorkflow] = useState<WorkflowDefinition>(workflows[0]);
   const [sourceUrl, setSourceUrl] = useState<string | null>(null);
+  const [sourceFile, setSourceFile] = useState<File | null>(null);
   const [fileName, setFileName] = useState<string | null>(null);
   const [prompt, setPrompt] = useState("");
   const [providerStatus, setProviderStatus] = useState<Partial<Record<ProviderId, boolean>>>({});
+  const [storageConfigured, setStorageConfigured] = useState(false);
   const [status, setStatus] = useState<JobStatus>("queued");
   const [resultUrl, setResultUrl] = useState<string | null>(null);
+  const [resultKind, setResultKind] = useState<MediaKind>("image");
   const [error, setError] = useState<string | null>(null);
   const [jobs, setJobs] = useState<JobRecord[]>([]);
   const [isRunning, setIsRunning] = useState(false);
   const objectUrlRef = useRef<string | null>(null);
 
   const requiresImage = selectedWorkflow.requiredInputs.includes("image");
-  const isLiveWorkflow = !requiresImage;
+  const isLiveWorkflow = !requiresImage || storageConfigured;
   const isConfigured = Boolean(providerStatus[selectedWorkflow.provider]);
 
   useEffect(() => {
@@ -183,12 +192,16 @@ export function Studio() {
 
     fetch("/api/providers")
       .then((response) => response.json())
-      .then((body: { providers: Array<{ id: ProviderId; configured: boolean }> }) => {
+      .then((body: { providers: Array<{ id: ProviderId; configured: boolean }>; storage: { configured: boolean } }) => {
         const next: Partial<Record<ProviderId, boolean>> = {};
         for (const provider of body.providers) next[provider.id] = provider.configured;
         setProviderStatus(next);
+        setStorageConfigured(body.storage.configured);
       })
-      .catch(() => setProviderStatus({}));
+      .catch(() => {
+        setProviderStatus({});
+        setStorageConfigured(false);
+      });
 
     return () => {
       if (objectUrlRef.current) URL.revokeObjectURL(objectUrlRef.current);
@@ -214,6 +227,7 @@ export function Studio() {
     const url = URL.createObjectURL(file);
     objectUrlRef.current = url;
     setSourceUrl(url);
+    setSourceFile(file);
     setFileName(file.name);
     setResultUrl(null);
     setError(null);
@@ -233,10 +247,12 @@ export function Studio() {
         id: `local_${Date.now()}`,
         label: `${selectedWorkflow.label} (local preview)`,
         source: "local",
+        kind: "image",
         resultUrl: output,
         createdAt: new Date().toLocaleString(),
       };
       setResultUrl(output);
+      setResultKind("image");
       saveJobs([job, ...jobs].slice(0, 8));
       setStatus("complete");
     } catch (caughtError) {
@@ -249,16 +265,30 @@ export function Studio() {
 
   async function handleGenerateLive() {
     if (!prompt.trim()) return;
+    if (requiresImage && !sourceFile) return;
     setIsRunning(true);
     setResultUrl(null);
     setError(null);
     setStatus("processing");
 
     try {
+      let inputImages: Array<{ id: string; url: string }> | undefined;
+
+      if (requiresImage && sourceFile) {
+        const uploadForm = new FormData();
+        uploadForm.append("file", sourceFile);
+        const uploadResponse = await fetch("/api/uploads", { method: "POST", body: uploadForm });
+        const uploadBody = (await uploadResponse.json()) as { url?: string; error?: string };
+        if (!uploadResponse.ok || !uploadBody.url) {
+          throw new Error(uploadBody.error ?? "Upload failed.");
+        }
+        inputImages = [{ id: "input-0", url: uploadBody.url }];
+      }
+
       const response = await fetch("/api/jobs", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ workflowId: selectedWorkflow.id, prompt: prompt.trim() }),
+        body: JSON.stringify({ workflowId: selectedWorkflow.id, prompt: prompt.trim(), inputImages }),
       });
       const body = (await response.json()) as { job: MediaJob };
       const finalJob = body.job.status === "complete" || body.job.status === "failed" ? body.job : await pollJob(body.job.id);
@@ -270,11 +300,13 @@ export function Studio() {
       const job: JobRecord = {
         id: finalJob.id,
         label: `${selectedWorkflow.label} — "${prompt.trim().slice(0, 60)}"`,
-        source: "seedream",
+        source: finalJob.provider,
+        kind: finalJob.kind,
         resultUrl: finalJob.resultUrls[0],
         createdAt: new Date().toLocaleString(),
       };
       setResultUrl(finalJob.resultUrls[0]);
+      setResultKind(finalJob.kind);
       saveJobs([job, ...jobs].slice(0, 8));
       setStatus("complete");
     } catch (caughtError) {
@@ -292,7 +324,10 @@ export function Studio() {
     saveJobs([]);
   }
 
-  const canGenerate = isLiveWorkflow ? prompt.trim().length > 0 : Boolean(sourceUrl);
+  const canGenerate = isLiveWorkflow
+    ? prompt.trim().length > 0 && (!requiresImage || Boolean(sourceFile))
+    : Boolean(sourceUrl);
+  const resultExtension = resultKind === "video" ? "mp4" : "png";
 
   return (
     <div className="space-y-6">
@@ -301,11 +336,12 @@ export function Studio() {
         <div className="mt-3 grid grid-cols-1 gap-3 sm:grid-cols-2">
           {workflows.map((workflow) => {
             const active = workflow.id === selectedWorkflow.id;
-            const live = !workflow.requiredInputs.includes("image");
+            const live = !workflow.requiredInputs.includes("image") || storageConfigured;
+            const configured = Boolean(providerStatus[workflow.provider]);
             const badge = live
-              ? providerStatus[workflow.provider]
+              ? configured
                 ? "Live · real generation"
-                : `Live · needs ${workflow.provider === "seedream" ? "SEEDREAM_API_KEY" : "RUNPOD_API_KEY"}`
+                : `Live · needs ${PROVIDER_ENV_HINT[workflow.provider] ?? "provider key"}`
               : "Local preview only";
             return (
               <button
@@ -322,9 +358,7 @@ export function Studio() {
                 <div className="mt-1 text-xs text-white/50">{workflow.description}</div>
                 <div
                   className={`mt-2 inline-block rounded-full px-2 py-0.5 text-[10px] uppercase tracking-wide ${
-                    live && providerStatus[workflow.provider]
-                      ? "bg-emerald-400/15 text-emerald-200"
-                      : "bg-white/10 text-white/50"
+                    live && configured ? "bg-emerald-400/15 text-emerald-200" : "bg-white/10 text-white/50"
                   }`}
                 >
                   {badge}
@@ -335,12 +369,13 @@ export function Studio() {
         </div>
       </section>
 
-      {requiresImage ? (
+      {requiresImage && (
         <section className="rounded-2xl border border-white/10 bg-panel p-4 sm:p-6">
           <h2 className="text-sm font-semibold text-white/80">2. Upload an image</h2>
           <p className="mt-1 text-xs text-white/50">
-            This workflow needs hosted image input to run for real, which this local build
-            doesn&apos;t have yet — you&apos;ll get a local style preview instead.
+            {storageConfigured
+              ? "Uploaded to media storage and sent to the real provider below."
+              : "Media storage isn't configured yet, so this workflow always runs as a local style preview instead of real generation."}
           </p>
           <label className="mt-3 flex min-h-[44px] w-full cursor-pointer items-center justify-center rounded-xl border border-dashed border-white/20 bg-white/5 px-4 py-3 text-sm text-white/70 active:bg-white/10">
             <input type="file" accept="image/*" className="hidden" onChange={handleFileChange} />
@@ -355,18 +390,20 @@ export function Studio() {
             />
           )}
         </section>
-      ) : (
+      )}
+
+      {isLiveWorkflow && (
         <section className="rounded-2xl border border-white/10 bg-panel p-4 sm:p-6">
-          <h2 className="text-sm font-semibold text-white/80">2. Describe the image</h2>
+          <h2 className="text-sm font-semibold text-white/80">{requiresImage ? "3. Describe the change" : "2. Describe the image"}</h2>
           <p className="mt-1 text-xs text-white/50">
             {isConfigured
-              ? "Sent to a real Seedream image job."
-              : "Seedream isn't configured yet — generating will show the exact error the API returns."}
+              ? `Sent to a real ${selectedWorkflow.provider} job.`
+              : `${selectedWorkflow.provider} isn't configured yet — generating will show the exact error the API returns.`}
           </p>
           <textarea
             value={prompt}
             onChange={(event) => setPrompt(event.target.value)}
-            placeholder="A neon-lit city street in the rain, cinematic"
+            placeholder={requiresImage ? "Change the outfit to a red leather jacket" : "A neon-lit city street in the rain, cinematic"}
             rows={3}
             className="mt-3 w-full rounded-xl border border-white/10 bg-white/5 p-3 text-sm text-white placeholder:text-white/30 focus:border-cyan-300 focus:outline-none"
           />
@@ -374,7 +411,7 @@ export function Studio() {
       )}
 
       <section className="rounded-2xl border border-white/10 bg-panel p-4 sm:p-6">
-        <h2 className="text-sm font-semibold text-white/80">3. Generate{isLiveWorkflow ? "" : " and download"}</h2>
+        <h2 className="text-sm font-semibold text-white/80">{isLiveWorkflow && requiresImage ? "4." : "3."} Generate{isLiveWorkflow ? "" : " and download"}</h2>
         <div className="mt-3 flex flex-col gap-3 sm:flex-row">
           <button
             type="button"
@@ -382,7 +419,7 @@ export function Studio() {
             onClick={isLiveWorkflow ? handleGenerateLive : handleGenerateLocal}
             className="min-h-[44px] rounded-xl bg-accent px-4 py-3 text-sm font-semibold text-white disabled:cursor-not-allowed disabled:bg-white/10 disabled:text-white/40"
           >
-            {isRunning ? "Generating…" : isLiveWorkflow ? "Generate with Seedream" : "Generate local preview"}
+            {isRunning ? "Generating…" : isLiveWorkflow ? `Generate with ${selectedWorkflow.provider}` : "Generate local preview"}
           </button>
           <button
             type="button"
@@ -404,22 +441,26 @@ export function Studio() {
           <div className="mt-4">
             <div className="mb-2 flex items-center justify-between gap-3">
               <div className="text-xs text-white/50">
-                {isLiveWorkflow ? "Real Seedream output" : "Local preview with a BEFORE inset and visible effect overlay"}
+                {isLiveWorkflow ? `Real ${selectedWorkflow.provider} output` : "Local preview with a BEFORE inset and visible effect overlay"}
               </div>
               <a
                 href={resultUrl}
-                download={`aimediaos-${selectedWorkflow.id}.png`}
+                download={`aimediaos-${selectedWorkflow.id}.${resultExtension}`}
                 className="rounded-lg bg-white/10 px-3 py-2 text-xs font-semibold text-white active:bg-white/20"
               >
                 Download
               </a>
             </div>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={resultUrl}
-              alt="Generated result preview"
-              className="mt-2 max-h-[520px] w-full rounded-xl object-contain"
-            />
+            {resultKind === "video" ? (
+              <video src={resultUrl} controls className="mt-2 max-h-[520px] w-full rounded-xl object-contain" />
+            ) : (
+              // eslint-disable-next-line @next/next/no-img-element
+              <img
+                src={resultUrl}
+                alt="Generated result preview"
+                className="mt-2 max-h-[520px] w-full rounded-xl object-contain"
+              />
+            )}
           </div>
         )}
       </section>
@@ -431,14 +472,18 @@ export function Studio() {
             {jobs.map((job) => (
               <a
                 href={job.resultUrl}
-                download={`aimediaos-${job.id}.png`}
+                download={`aimediaos-${job.id}.${job.kind === "video" ? "mp4" : "png"}`}
                 key={job.id}
                 className="rounded-xl border border-white/10 bg-white/5 p-3 active:bg-white/10"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img src={job.resultUrl} alt="Recent generated result" className="h-28 w-full rounded-lg object-cover" />
+                {job.kind === "video" ? (
+                  <video src={job.resultUrl} className="h-28 w-full rounded-lg object-cover" muted />
+                ) : (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img src={job.resultUrl} alt="Recent generated result" className="h-28 w-full rounded-lg object-cover" />
+                )}
                 <div className="mt-2 text-sm font-medium text-white">{job.label}</div>
-                <div className="text-xs text-white/50">{job.source === "seedream" ? "Real Seedream job" : "Local preview"}</div>
+                <div className="text-xs text-white/50">{job.source === "local" ? "Local preview" : `Real ${job.source} job`}</div>
                 <div className="text-xs text-white/40">{job.createdAt}</div>
               </a>
             ))}

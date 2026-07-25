@@ -14,7 +14,7 @@ function imagesResponse(resultUrls: string[]) {
 }
 
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
-  const job = jobs.get(params.id);
+  const job = await jobs.get(params.id);
   if (!job) return json(404, { error: "Job not found." });
 
   let updated = job;
@@ -31,7 +31,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         error: status.error,
         updatedAt: new Date().toISOString(),
       };
-      jobs.set(job.id, updated);
+      await jobs.set(job.id, updated);
     }
   }
 

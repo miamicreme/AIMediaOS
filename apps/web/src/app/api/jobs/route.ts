@@ -61,7 +61,7 @@ export async function POST(request: Request) {
     updatedAt: now,
   };
 
-  jobs.set(job.id, job);
+  await jobs.set(job.id, job);
 
   const submitted = await provider.submitJob(providerInput);
   const updated: MediaJob = {
@@ -76,11 +76,12 @@ export async function POST(request: Request) {
     error: submitted.error,
     updatedAt: new Date().toISOString(),
   };
-  jobs.set(job.id, updated);
+  await jobs.set(job.id, updated);
 
   return json(submitted.status === "failed" ? 422 : 201, { job: updated });
 }
 
 export async function GET() {
-  return json(200, { jobs: Array.from(jobs.values()).sort((a, b) => b.createdAt.localeCompare(a.createdAt)) });
+  const allJobs = await jobs.list();
+  return json(200, { jobs: allJobs.sort((a, b) => b.createdAt.localeCompare(a.createdAt)) });
 }

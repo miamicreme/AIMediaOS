@@ -109,7 +109,7 @@ export async function POST(request: Request) {
     updatedAt: now,
   };
 
-  jobs.set(job.id, job);
+  await jobs.set(job.id, job);
 
   const submitted = await provider.submitJob(providerInput);
   const updated: MediaJob = {
@@ -124,7 +124,7 @@ export async function POST(request: Request) {
     error: submitted.error,
     updatedAt: new Date().toISOString(),
   };
-  jobs.set(job.id, updated);
+  await jobs.set(job.id, updated);
 
   if (updated.status === "failed") {
     return json(422, { job: updated, error: updated.error });
