@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { providers } from "@aimediaos/providers";
+import { isStorageConfigured } from "@aimediaos/db";
 
 export async function GET() {
   return NextResponse.json({
@@ -8,5 +9,6 @@ export async function GET() {
       label: provider.label,
       configured: provider.isConfigured(),
     })),
+    storage: { configured: isStorageConfigured() },
   });
 }

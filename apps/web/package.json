@@ -10,6 +10,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@aimediaos/db": "workspace:*",
     "@aimediaos/providers": "workspace:*",
     "@aimediaos/shared": "workspace:*",
     "@aimediaos/workflows": "workspace:*",

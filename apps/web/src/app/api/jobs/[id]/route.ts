@@ -7,7 +7,7 @@ function json(status: number, body: unknown) {
 }
 
 export async function GET(_request: Request, { params }: { params: { id: string } }) {
-  const job = jobs.get(params.id);
+  const job = await jobs.get(params.id);
   if (!job) return json(404, { error: "Job not found." });
 
   if (job.providerJobId && ["queued", "processing"].includes(job.status)) {
@@ -22,7 +22,7 @@ export async function GET(_request: Request, { params }: { params: { id: string 
         error: status.error,
         updatedAt: new Date().toISOString(),
       };
-      jobs.set(job.id, updated);
+      await jobs.set(job.id, updated);
       return json(200, { job: updated });
     }
   }
