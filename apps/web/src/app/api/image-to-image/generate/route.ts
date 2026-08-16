@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { getProviderForJob } from "@aimediaos/providers";
 import { getWorkflowById } from "@aimediaos/workflows";
@@ -10,6 +10,8 @@ import {
   validateResolution,
   sanitizeErrorMessage,
 } from "@aimediaos/db";
+import { deductCredits } from "@aimediaos/db/billing";
+import { requireAuth, checkCredits } from "../middleware/auth";
 import { jobs } from "../../jobs/store";
 
 function json(status: number, body: unknown) {
@@ -72,7 +74,10 @@ function imagesResponse(resultUrls: string[]) {
   }));
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const { context: authContext, response: authError } = await requireAuth(request);
+  if (authError) return authError;
+
   let body: ImageToImageRequest;
 
   try {
@@ -141,6 +146,13 @@ export async function POST(request: Request) {
 
   await jobs.set(job.id, job);
 
+  const credits = await checkCredits(authContext!.userId, workflowId);
+  if (!credits.hasCredits) {
+    const updatedJob: MediaJob = { ...job, status: "failed", error: `Insufficient credits. Required: ${credits.required}, Available: ${credits.balance}` };
+    await jobs.set(job.id, updatedJob);
+    return json(402, { error: `Insufficient credits. Required: ${credits.required}, Available: ${credits.balance}`, job: updatedJob });
+  }
+
   const submitted = await provider.submitJob(providerInput);
   const updated: MediaJob = {
     ...job,
@@ -155,6 +167,10 @@ export async function POST(request: Request) {
     updatedAt: new Date().toISOString(),
   };
   await jobs.set(job.id, updated);
+
+  if (updated.status !== "failed") {
+    await deductCredits(authContext!.userId, workflowId, job.id);
+  }
 
   if (updated.status === "failed") {
     return json(422, { job: updated, error: updated.error });
