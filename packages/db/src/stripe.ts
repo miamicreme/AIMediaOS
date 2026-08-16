@@ -45,6 +45,7 @@ export async function handlePaymentSuccess(event: Stripe.Event) {
   const session = event.data.object as Stripe.Checkout.Session;
   const userId = session.metadata?.userId;
   const planId = session.metadata?.planId;
+  const email = session.customer_email;
 
   if (!userId || !planId) {
     console.error("Missing userId or planId in session metadata");
@@ -65,6 +66,11 @@ export async function handlePaymentSuccess(event: Stripe.Event) {
     });
 
   await supabase.from("user_profiles").update({ subscription_tier: planId }).eq("id", userId);
+
+  if (email && session.amount_total) {
+    const { sendEmail, createPaymentSuccessEmail } = await import("./email");
+    await sendEmail(createPaymentSuccessEmail(email, planId, session.amount_total));
+  }
 }
 
 export async function handleSubscriptionCancelled(event: Stripe.Event) {
@@ -78,7 +84,11 @@ export async function handleSubscriptionCancelled(event: Stripe.Event) {
   const { supabase } = await import("./index");
   if (!supabase) throw new Error("Supabase not configured");
 
-  const { data: profile } = await supabase.from("user_profiles").select("id").eq("stripe_customer_id", customerId).single();
+  const { data: profile } = await supabase
+    .from("user_profiles")
+    .select("id, email")
+    .eq("stripe_customer_id", customerId)
+    .single();
 
   if (!profile) return;
 
@@ -89,6 +99,11 @@ export async function handleSubscriptionCancelled(event: Stripe.Event) {
     .is("ended_at", null);
 
   await supabase.from("user_profiles").update({ subscription_tier: "free" }).eq("id", profile.id);
+
+  if (profile.email) {
+    const { sendEmail, createSubscriptionCancelledEmail } = await import("./email");
+    await sendEmail(createSubscriptionCancelledEmail(profile.email));
+  }
 }
 
 export function verifyWebhookSignature(payload: string, signature: string, secret: string): Stripe.Event | null {
