@@ -1,8 +1,10 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { getProviderForJob } from "@aimediaos/providers";
 import { getWorkflowById } from "@aimediaos/workflows";
 import type { CreateMediaJobInput, MediaJob } from "@aimediaos/shared";
+import { deductCredits } from "@aimediaos/db/billing";
+import { requireAuth, checkCredits } from "../middleware/auth";
 import { jobs } from "./store";
 
 function json(status: number, body: unknown) {
@@ -19,7 +21,10 @@ function validateInput(input: CreateMediaJobInput) {
   return null;
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const { context: authContext, response: authError } = await requireAuth(request);
+  if (authError) return authError;
+
   let input: CreateMediaJobInput;
 
   try {
@@ -32,6 +37,12 @@ export async function POST(request: Request) {
   if (validationError) return json(400, { error: validationError });
 
   const workflow = getWorkflowById(input.workflowId)!;
+
+  const credits = await checkCredits(authContext!.userId, input.workflowId);
+  if (!credits.hasCredits) {
+    return json(402, { error: `Insufficient credits. Required: ${credits.required}, Available: ${credits.balance}` });
+  }
+
   const now = new Date().toISOString();
   const jobId = randomUUID();
   const model = input.model ?? workflow.defaultModel;
@@ -77,6 +88,10 @@ export async function POST(request: Request) {
     updatedAt: new Date().toISOString(),
   };
   await jobs.set(job.id, updated);
+
+  if (updated.status !== "failed") {
+    await deductCredits(authContext!.userId, input.workflowId, jobId);
+  }
 
   return json(submitted.status === "failed" ? 422 : 201, { job: updated });
 }
