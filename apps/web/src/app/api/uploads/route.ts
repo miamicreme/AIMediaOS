@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { isStorageConfigured, uploadMediaFile } from "@aimediaos/db";
+import { isStorageConfigured, uploadMediaFile, validateFile, sanitizeErrorMessage } from "@aimediaos/db";
 
 function json(status: number, body: unknown) {
   return NextResponse.json(body, { status });
@@ -8,7 +8,7 @@ function json(status: number, body: unknown) {
 export async function POST(request: Request) {
   if (!isStorageConfigured()) {
     return json(503, {
-      error: "Media storage is not configured. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY (or SUPABASE_ANON_KEY) to upload images for real generation.",
+      error: "Media storage is not configured.",
     });
   }
 
@@ -24,10 +24,16 @@ export async function POST(request: Request) {
     return json(400, { error: "Missing 'file' field." });
   }
 
+  const validation = validateFile(file);
+  if (!validation.valid) {
+    return json(400, { error: validation.error });
+  }
+
   try {
     const { url } = await uploadMediaFile(file);
     return json(201, { url });
   } catch (error) {
-    return json(422, { error: error instanceof Error ? error.message : "Upload failed." });
+    const message = sanitizeErrorMessage(error);
+    return json(422, { error: message });
   }
 }

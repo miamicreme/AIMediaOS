@@ -1,8 +1,17 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { randomUUID } from "node:crypto";
 import { getProviderForJob } from "@aimediaos/providers";
 import { getWorkflowById } from "@aimediaos/workflows";
 import type { CreateMediaJobInput, MediaAsset, MediaJob } from "@aimediaos/shared";
+import {
+  validatePrompt,
+  validateImageUrl,
+  validateAspectRatio,
+  validateResolution,
+  sanitizeErrorMessage,
+} from "@aimediaos/db";
+import { deductCredits } from "@aimediaos/db/billing";
+import { requireAuth, checkCredits } from "../middleware/auth";
 import { jobs } from "../../jobs/store";
 
 function json(status: number, body: unknown) {
@@ -27,24 +36,35 @@ type ImageToImageRequest = {
   options?: Record<string, unknown>;
 };
 
-function extractImages(body: ImageToImageRequest): MediaAsset[] {
+function extractImages(body: ImageToImageRequest): { valid: boolean; error?: string; assets?: MediaAsset[] } {
   const directUrl = body.imageUrl ?? body.image_url ?? body.inputImageUrl;
   const assets: MediaAsset[] = [];
 
   if (directUrl) {
-    assets.push({ id: "input-0", url: directUrl });
+    const validation = validateImageUrl(directUrl);
+    if (!validation.valid) return { valid: false, error: validation.error };
+    assets.push({ id: "input-0", url: validation.value! });
   }
 
   if (Array.isArray(body.images)) {
-    body.images.forEach((item, index) => {
-      if (typeof item === "string") assets.push({ id: `input-${index + assets.length}`, url: item });
-      if (item && typeof item === "object" && item.url) {
-        assets.push({ id: item.id ?? `input-${index + assets.length}`, url: item.url });
+    for (let i = 0; i < Math.min(body.images.length, 5); i++) {
+      const item = body.images[i];
+      if (typeof item === "string") {
+        const validation = validateImageUrl(item);
+        if (!validation.valid) return { valid: false, error: validation.error };
+        assets.push({ id: `input-${assets.length}`, url: validation.value! });
+      } else if (item && typeof item === "object" && item.url) {
+        const validation = validateImageUrl(item.url);
+        if (!validation.valid) return { valid: false, error: validation.error };
+        assets.push({ id: item.id ?? `input-${assets.length}`, url: validation.value! });
       }
-    });
+    }
+    if (body.images.length > 5) {
+      return { valid: false, error: "Maximum 5 images per request." };
+    }
   }
 
-  return assets;
+  return { valid: true, assets };
 }
 
 function imagesResponse(resultUrls: string[]) {
@@ -54,7 +74,10 @@ function imagesResponse(resultUrls: string[]) {
   }));
 }
 
-export async function POST(request: Request) {
+export async function POST(request: NextRequest) {
+  const { context: authContext, response: authError } = await requireAuth(request);
+  if (authError) return authError;
+
   let body: ImageToImageRequest;
 
   try {
@@ -63,11 +86,23 @@ export async function POST(request: Request) {
     return json(400, { error: "Invalid JSON body." });
   }
 
-  const prompt = body.prompt?.trim();
-  const inputImages = extractImages(body);
+  const promptValidation = validatePrompt(body.prompt);
+  if (!promptValidation.valid) return json(400, { error: promptValidation.error });
 
-  if (!prompt) return json(400, { error: "Prompt is required." });
-  if (inputImages.length === 0) return json(400, { error: "At least one input image URL is required." });
+  const imagesExtraction = extractImages(body);
+  if (!imagesExtraction.valid) return json(400, { error: imagesExtraction.error });
+  if (!imagesExtraction.assets || imagesExtraction.assets.length === 0) {
+    return json(400, { error: "At least one input image URL is required." });
+  }
+
+  const aspectRatioValidation = validateAspectRatio(body.aspectRatio ?? body.aspect_ratio ?? "3:4");
+  if (!aspectRatioValidation.valid) return json(400, { error: aspectRatioValidation.error });
+
+  const resolutionValidation = validateResolution(body.resolution ?? "HD");
+  if (!resolutionValidation.valid) return json(400, { error: resolutionValidation.error });
+
+  const prompt = promptValidation.value!;
+  const inputImages = imagesExtraction.assets!;
 
   const workflowId: CreateMediaJobInput["workflowId"] = body.effectId === "ai-clothes-changer" ? "ai-clothes-changer" : "image-to-image";
   const workflow = getWorkflowById(workflowId)!;
@@ -111,6 +146,13 @@ export async function POST(request: Request) {
 
   await jobs.set(job.id, job);
 
+  const credits = await checkCredits(authContext!.userId, workflowId);
+  if (!credits.hasCredits) {
+    const updatedJob: MediaJob = { ...job, status: "failed", error: `Insufficient credits. Required: ${credits.required}, Available: ${credits.balance}` };
+    await jobs.set(job.id, updatedJob);
+    return json(402, { error: `Insufficient credits. Required: ${credits.required}, Available: ${credits.balance}`, job: updatedJob });
+  }
+
   const submitted = await provider.submitJob(providerInput);
   const updated: MediaJob = {
     ...job,
@@ -125,6 +167,10 @@ export async function POST(request: Request) {
     updatedAt: new Date().toISOString(),
   };
   await jobs.set(job.id, updated);
+
+  if (updated.status !== "failed") {
+    await deductCredits(authContext!.userId, workflowId, job.id);
+  }
 
   if (updated.status === "failed") {
     return json(422, { job: updated, error: updated.error });
