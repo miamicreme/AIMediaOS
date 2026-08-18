@@ -25,16 +25,16 @@ export async function getUserCredits(userId: string): Promise<UserCredits | null
 export async function hasEnoughCredits(
   userId: string,
   workflowId: string
-): Promise<{ hasCreditts: boolean; balance: number; required: number }> {
+): Promise<{ hasCredits: boolean; balance: number; required: number }> {
   const credits = await getUserCredits(userId);
   const required = getCreditCost(workflowId);
 
   if (!credits) {
-    return { hasCreditts: false, balance: 0, required };
+    return { hasCredits: false, balance: 0, required };
   }
 
   return {
-    hasCreditts: credits.balance >= required,
+    hasCredits: credits.balance >= required,
     balance: credits.balance,
     required,
   };
@@ -178,23 +178,42 @@ export async function trackUsage(
   try {
     const today = new Date().toISOString().split("T")[0];
 
-    // Upsert usage record (increment if exists)
-    const { error } = await client.from("usage_analytics").upsert(
-      {
+    // First, try to get existing record
+    const { data: existing } = await client
+      .from("usage_analytics")
+      .select("count")
+      .eq("user_id", userId)
+      .eq("date", today)
+      .eq("workflow", workflowId)
+      .single();
+
+    if (existing) {
+      // Update existing record
+      const { error } = await client
+        .from("usage_analytics")
+        .update({ count: (existing as any).count + 1 })
+        .eq("user_id", userId)
+        .eq("date", today)
+        .eq("workflow", workflowId);
+
+      if (error) {
+        console.error("Usage tracking update error:", error);
+        return { success: false, error: error.message };
+      }
+    } else {
+      // Insert new record
+      const { error } = await client.from("usage_analytics").insert({
         user_id: userId,
         date: today,
         workflow: workflowId,
         count: 1,
         created_at: new Date().toISOString(),
-      },
-      {
-        onConflict: "user_id,date,workflow",
-      }
-    );
+      });
 
-    if (error) {
-      console.error("Usage tracking error:", error);
-      return { success: false, error: error.message };
+      if (error) {
+        console.error("Usage tracking insert error:", error);
+        return { success: false, error: error.message };
+      }
     }
 
     return { success: true };

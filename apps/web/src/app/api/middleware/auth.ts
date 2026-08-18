@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { getWorkflowById } from "@aimediaos/workflows";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
@@ -73,15 +74,9 @@ export async function checkCredits(
   workflowId: string
 ): Promise<{ hasCredits: boolean; balance: number; required: number; error?: string }> {
   try {
-    // Get credit cost
-    const creditCosts: Record<string, number> = {
-      "text-to-image": 1,
-      "image-to-image": 1,
-      "ai-clothes-changer": 2,
-      "image-to-video": 3,
-    };
-
-    const required = creditCosts[workflowId] || 1;
+    // Get credit cost from workflow definition
+    const workflow = getWorkflowById(workflowId);
+    const required = workflow?.creditCost || 1;
 
     // Get user credits
     const { data: credits, error } = await supabase

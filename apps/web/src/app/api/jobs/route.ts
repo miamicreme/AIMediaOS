@@ -70,6 +70,7 @@ export async function POST(request: NextRequest) {
     queue: input.queueTag ? { queueTag: input.queueTag } : undefined,
     createdAt: now,
     updatedAt: now,
+    userId: authContext!.userId,
   };
 
   await jobs.set(job.id, job);

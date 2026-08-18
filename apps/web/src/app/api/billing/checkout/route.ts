@@ -32,6 +32,11 @@ export async function POST(request: NextRequest) {
       cancelUrl: `${baseUrl}/pricing`,
     });
 
+    if (!session.url) {
+      console.error("Stripe session created without redirect URL");
+      return json(500, { error: "Failed to generate checkout URL" });
+    }
+
     return json(200, { sessionId: session.id, url: session.url });
   } catch (error) {
     console.error("Checkout error:", error);

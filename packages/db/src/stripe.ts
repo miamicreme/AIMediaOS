@@ -19,9 +19,17 @@ export interface CheckoutSessionParams {
 export async function createCheckoutSession(params: CheckoutSessionParams) {
   if (!stripe) throw new Error("Stripe not configured");
 
+  const monthlyPrice = process.env.STRIPE_PRICE_PRO_MONTHLY;
+  const annualPrice = process.env.STRIPE_PRICE_PRO_ANNUAL;
+
+  if (!monthlyPrice || !annualPrice) {
+    console.error("Missing Stripe price IDs in environment");
+    throw new Error("Stripe prices not configured");
+  }
+
   const planPrices: Record<string, string> = {
-    "pro-monthly": process.env.STRIPE_PRICE_PRO_MONTHLY || "",
-    "pro-annual": process.env.STRIPE_PRICE_PRO_ANNUAL || "",
+    "pro-monthly": monthlyPrice,
+    "pro-annual": annualPrice,
   };
 
   const priceId = planPrices[params.planId];
@@ -54,6 +62,11 @@ export async function handlePaymentSuccess(event: Stripe.Event) {
 
   const { supabase } = await import("./index");
   if (!supabase) throw new Error("Supabase not configured");
+
+  if (!session.customer) {
+    console.error("Stripe session missing customer ID");
+    return;
+  }
 
   await supabase.from("user_profiles").update({ stripe_customer_id: session.customer as string }).eq("id", userId);
 
