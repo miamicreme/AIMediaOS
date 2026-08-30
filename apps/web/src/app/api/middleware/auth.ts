@@ -43,11 +43,13 @@ export async function getAuthContext(request: NextRequest): Promise<{ context: A
       .eq("id", user.id)
       .single();
 
+    const profileData = profile as { subscription_tier: string } | null;
+
     return {
       context: {
         userId: user.id,
         email: user.email || "",
-        subscriptionTier: (profile as any)?.subscription_tier || "free",
+        subscriptionTier: profileData?.subscription_tier || "free",
       },
       error: null,
     };
@@ -94,9 +96,11 @@ export async function checkCredits(
       };
     }
 
+    const creditsData = credits as { balance: number };
+
     return {
-      hasCredits: (credits as any).balance >= required,
-      balance: (credits as any).balance,
+      hasCredits: creditsData.balance >= required,
+      balance: creditsData.balance,
       required,
     };
   } catch (error) {

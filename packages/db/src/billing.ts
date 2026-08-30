@@ -78,6 +78,8 @@ export async function deductCredits(
       return { success: false, error: updateError.message };
     }
 
+    const updatedData = updated as { balance: number };
+
     // Log transaction
     await logTransaction(userId, -creditCost, "usage", `Job: ${jobId}`, {
       workflowId,
@@ -86,7 +88,7 @@ export async function deductCredits(
 
     return {
       success: true,
-      newBalance: (updated as any).balance,
+      newBalance: updatedData.balance,
     };
   } catch (error) {
     return {
@@ -128,11 +130,13 @@ export async function addCredits(
       return { success: false, error: updateError.message };
     }
 
+    const updatedData = updated as { balance: number };
+
     await logTransaction(userId, amount, transactionType, reason);
 
     return {
       success: true,
-      newBalance: (updated as any).balance,
+      newBalance: updatedData.balance,
     };
   } catch (error) {
     return {

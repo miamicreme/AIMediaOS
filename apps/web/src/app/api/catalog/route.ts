@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { workflows } from "@aimediaos/workflows";
 
-export async function GET() {
+export async function GET(): Promise<NextResponse> {
   return NextResponse.json({
     categories: [
       { id: "image", label: "AI Image" },

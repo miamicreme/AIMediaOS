@@ -21,7 +21,7 @@ function validateInput(input: CreateMediaJobInput) {
   return null;
 }
 
-export async function POST(request: NextRequest) {
+export async function POST(request: NextRequest): Promise<NextResponse> {
   const { context: authContext, response: authError } = await requireAuth(request);
   if (authError) return authError;
 
@@ -97,7 +97,12 @@ export async function POST(request: NextRequest) {
   return json(submitted.status === "failed" ? 422 : 201, { job: updated });
 }
 
-export async function GET() {
-  const allJobs = await jobs.list();
-  return json(200, { jobs: allJobs.sort((a, b) => b.createdAt.localeCompare(a.createdAt)) });
+export async function GET(): Promise<NextResponse> {
+  try {
+    const allJobs = await jobs.list();
+    return json(200, { jobs: allJobs.sort((a, b) => b.createdAt.localeCompare(a.createdAt)) });
+  } catch (error) {
+    console.error("Jobs list error:", error);
+    return json(500, { error: "Failed to fetch jobs" });
+  }
 }
